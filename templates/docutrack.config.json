@@ -1,0 +1,13 @@
+{
+  "template": "express",
+  "minCoverage": 80,
+  "ignore": [
+    "**/*.test.js",
+    "**/*.spec.js",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "src/migrations",
+    "src/seeds",
+    "src/__generated__"
+  ]
+}

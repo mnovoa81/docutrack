@@ -1,0 +1,31 @@
+name: DocuTrack Coverage Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  coverage-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check documentation coverage
+        run: |
+          STATUS=$(npx docutrack status --json 2>/dev/null || echo '{"coverage":0}')
+          COVERAGE=$(echo $STATUS | node -e 'process.stdin.on("data",d=>process.stdout.write(""+JSON.parse(d).coverage))')
+          MIN=$(node -e "try{const c=require('./docutrack.config.json');process.stdout.write(''+c.minCoverage)}catch{process.stdout.write('80')}")
+
+          echo "Coverage: ${COVERAGE}%  (minimum: ${MIN}%)"
+
+          if [ "$COVERAGE" -lt "$MIN" ]; then
+            echo "::error::Documentation coverage ${COVERAGE}% is below the minimum ${MIN}%."
+            echo "::error::Run /arch-review in your Claude Code session to generate missing docs."
+            exit 1
+          fi
+
+          echo "::notice::Documentation coverage ${COVERAGE}% meets the minimum ${MIN}%."

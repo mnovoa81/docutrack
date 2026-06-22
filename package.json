@@ -1,0 +1,29 @@
+{
+  "name": "docutrack",
+  "version": "0.1.0",
+  "description": "Claude Code plugin that forces AI agents to document what they build — automatically.",
+  "keywords": [
+    "claude-code",
+    "claude",
+    "documentation",
+    "ai-agents",
+    "architecture",
+    "developer-tools"
+  ],
+  "license": "MIT",
+  "type": "commonjs",
+  "bin": {
+    "docutrack": "./bin/docutrack.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "templates/"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "test": "node --test src/**/*.test.js"
+  }
+}

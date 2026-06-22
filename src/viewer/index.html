@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocuTrack</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #ffffff;
+  --bg-sidebar: #f8fafc;
+  --bg-hover: #f1f5f9;
+  --bg-active: #eef2ff;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --text-sidebar: #374151;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-light: #eef2ff;
+  --code-bg: #f1f5f9;
+  --code-text: #1e293b;
+  --green: #10b981; --green-bg: #dcfce7; --green-text: #166534;
+  --blue-bg: #dbeafe; --blue-text: #1e40af;
+  --yellow: #f59e0b; --yellow-bg: #fef3c7; --yellow-text: #92400e;
+  --orange-bg: #ffedd5; --orange-text: #9a3412;
+  --purple-bg: #ede9fe; --purple-text: #6d28d9;
+  --red: #ef4444; --red-bg: #fee2e2; --red-text: #991b1b;
+  --sidebar-w: 272px;
+  --header-h: 56px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Cascadia Code", "Fira Code", Consolas, monospace;
+  --radius: 6px;
+}
+
+[data-theme="dark"] {
+  --bg: #0f172a; --bg-sidebar: #1e293b; --bg-hover: #334155; --bg-active: #312e81;
+  --border: #334155; --text: #f1f5f9; --text-muted: #94a3b8; --text-sidebar: #cbd5e1;
+  --accent: #818cf8; --accent-hover: #a5b4fc; --accent-light: #1e1b4b;
+  --code-bg: #1e293b; --code-text: #e2e8f0;
+  --green-bg: #14532d; --green-text: #86efac;
+  --blue-bg: #1e3a5f; --blue-text: #93c5fd;
+  --yellow-bg: #78350f; --yellow-text: #fde68a;
+  --orange-bg: #7c2d12; --orange-text: #fed7aa;
+  --purple-bg: #3b0764; --purple-text: #d8b4fe;
+  --red-bg: #7f1d1d; --red-text: #fca5a5;
+}
+
+html, body { height: 100%; font-family: var(--font); color: var(--text); background: var(--bg); font-size: 15px; line-height: 1.6; }
+
+/* ── Layout ── */
+#app { display: grid; grid-template-columns: var(--sidebar-w) 1fr; grid-template-rows: var(--header-h) 1fr; height: 100vh; }
+
+/* ── Header ── */
+#header { grid-column: 1 / -1; background: var(--bg); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 16px; position: sticky; top: 0; z-index: 100; }
+.logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; color: var(--text); text-decoration: none; white-space: nowrap; cursor: pointer; }
+.logo-icon { width: 28px; height: 28px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+.header-sep { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
+#project-name { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+#coverage-badge { display: flex; align-items: center; gap: 6px; background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px; font-size: 12px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+.coverage-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+#theme-toggle { width: 32px; height: 32px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+#theme-toggle:hover { background: var(--bg-hover); }
+.live-pill { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; flex-shrink: 0; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* ── Search ── */
+#search-wrap { flex: 1; max-width: 380px; position: relative; }
+#search { width: 100%; padding: 6px 12px 6px 34px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-sidebar); color: var(--text); font-size: 13px; outline: none; }
+#search:focus { border-color: var(--accent); background: var(--bg); }
+#search::placeholder { color: var(--text-muted); }
+.search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; pointer-events: none; color: var(--text-muted); }
+.search-kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--text-muted); background: var(--border); padding: 1px 5px; border-radius: 3px; pointer-events: none; }
+
+/* ── Sidebar ── */
+#sidebar { background: var(--bg-sidebar); border-right: 1px solid var(--border); overflow-y: auto; padding: 16px 0 80px; }
+.nav-section { margin-bottom: 4px; }
+.nav-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); padding: 8px 20px 4px; }
+.nav-item { display: flex; align-items: center; gap: 8px; padding: 6px 20px; font-size: 13px; color: var(--text-sidebar); cursor: pointer; border-left: 2px solid transparent; }
+.nav-item:hover { background: var(--bg-hover); color: var(--text); }
+.nav-item.active { background: var(--bg-active); color: var(--accent); border-left-color: var(--accent); font-weight: 500; }
+.nav-icon { font-size: 14px; width: 16px; text-align: center; flex-shrink: 0; }
+.nav-empty { font-size: 12px; color: var(--text-muted); padding: 4px 20px 8px; font-style: italic; }
+.nav-badge { margin-left: auto; font-size: 11px; background: var(--accent-light); color: var(--accent); border-radius: 10px; padding: 0 6px; font-weight: 600; }
+.nav-stale { margin-left: auto; font-size: 10px; background: var(--yellow-bg); color: var(--yellow-text); border-radius: 10px; padding: 0 5px; font-weight: 700; }
+.stale-banner { background: var(--yellow-bg); border-top: 1px solid var(--yellow); padding: 8px 20px; font-size: 12px; color: var(--yellow-text); }
+
+/* Coverage bar */
+#coverage-section { margin-top: 16px; padding: 0 16px; }
+.coverage-label { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+.coverage-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.coverage-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width .5s; }
+.coverage-fill.warn { background: var(--yellow); }
+.coverage-fill.bad { background: var(--red); }
+
+/* ── Main ── */
+#main { overflow-y: auto; display: flex; justify-content: center; min-height: 0; }
+#doc-wrap { width: 100%; max-width: 800px; padding: 40px 48px 80px; }
+
+/* Pending banner */
+#pending-banner { display: none; background: var(--yellow-bg); border: 1px solid var(--yellow); border-radius: var(--radius); padding: 10px 16px; margin-bottom: 24px; font-size: 13px; color: var(--yellow-text); align-items: center; gap: 8px; }
+#pending-banner.show { display: flex; }
+
+/* ── Markdown ── */
+#doc-content h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+#doc-content h2 { font-size: 20px; font-weight: 700; margin-top: 36px; margin-bottom: 12px; }
+#doc-content h3 { font-size: 16px; font-weight: 600; margin-top: 24px; margin-bottom: 8px; }
+#doc-content h4 { font-size: 14px; font-weight: 600; margin-top: 16px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+#doc-content p { margin-bottom: 14px; }
+#doc-content ul, #doc-content ol { margin-bottom: 14px; padding-left: 24px; }
+#doc-content li { margin-bottom: 4px; }
+#doc-content a { color: var(--accent); text-decoration: none; }
+#doc-content a:hover { text-decoration: underline; }
+#doc-content blockquote { border-left: 3px solid var(--accent); padding: 8px 16px; margin: 16px 0; color: var(--text-muted); background: var(--accent-light); border-radius: 0 var(--radius) var(--radius) 0; }
+#doc-content blockquote p { margin: 0; }
+#doc-content code { font-family: var(--font-mono); font-size: 13px; background: var(--code-bg); color: var(--code-text); padding: 2px 6px; border-radius: 4px; }
+#doc-content pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; overflow-x: auto; margin: 16px 0; }
+#doc-content pre code { background: none; padding: 0; font-size: 13px; line-height: 1.6; }
+#doc-content table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+#doc-content th { background: var(--bg-sidebar); font-weight: 600; text-align: left; padding: 10px 14px; border: 1px solid var(--border); }
+#doc-content td { padding: 9px 14px; border: 1px solid var(--border); }
+#doc-content tr:nth-child(even) td { background: var(--bg-sidebar); }
+#doc-content hr { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+.mermaid-wrap { background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin: 20px 0; overflow-x: auto; text-align: center; }
+
+/* ── API Explorer ── */
+.api-explorer { width: 100%; }
+.api-explorer-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.base-url-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 260px; }
+.base-url-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+.base-url-row { display: flex; gap: 6px; align-items: center; }
+.base-url-input { padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text); font-size: 13px; font-family: var(--font-mono); width: 260px; outline: none; }
+.base-url-input:focus { border-color: var(--accent); }
+.auth-toggle { padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text-muted); font-size: 12px; cursor: pointer; white-space: nowrap; }
+.auth-toggle:hover { background: var(--bg-hover); }
+.auth-row { margin-top: 8px; display: none; gap: 6px; align-items: center; }
+.auth-row.show { display: flex; }
+.auth-input { flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text); font-size: 13px; font-family: var(--font-mono); outline: none; }
+.auth-input:focus { border-color: var(--accent); }
+.auth-label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+
+.api-group { margin-bottom: 24px; }
+.api-group-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-bottom: 8px; padding: 0 2px; }
+
+.endpoint-card { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; overflow: hidden; transition: box-shadow .15s; }
+.endpoint-card.open { box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.endpoint-header { display: flex; align-items: center; gap: 12px; padding: 11px 16px; cursor: pointer; background: var(--bg); user-select: none; }
+.endpoint-header:hover { background: var(--bg-hover); }
+.endpoint-path { font-family: var(--font-mono); font-size: 13px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.endpoint-summary { font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+.endpoint-chevron { color: var(--text-muted); font-size: 16px; transition: transform .2s; flex-shrink: 0; }
+.endpoint-card.open .endpoint-chevron { transform: rotate(90deg); }
+.endpoint-body { display: none; border-top: 1px solid var(--border); background: var(--bg); }
+.endpoint-card.open .endpoint-body { display: block; }
+.endpoint-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.endpoint-section:last-child { border-bottom: none; }
+.section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: 12px; }
+
+/* Method badges */
+.method-badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: .05em; font-family: var(--font-mono); flex-shrink: 0; min-width: 54px; justify-content: center; }
+.badge-get    { background: var(--green-bg);  color: var(--green-text); }
+.badge-post   { background: var(--blue-bg);   color: var(--blue-text); }
+.badge-put    { background: var(--orange-bg); color: var(--orange-text); }
+.badge-patch  { background: var(--purple-bg); color: var(--purple-text); }
+.badge-delete { background: var(--red-bg);    color: var(--red-text); }
+.badge-options,.badge-head { background: var(--code-bg); color: var(--text-muted); }
+
+/* Params table */
+.params-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.params-table th { font-size: 11px; font-weight: 600; text-align: left; padding: 6px 10px; background: var(--bg-sidebar); border: 1px solid var(--border); color: var(--text-muted); }
+.params-table td { padding: 7px 10px; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 12px; }
+.param-required { background: var(--red-bg); color: var(--red-text); padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; font-family: var(--font); }
+.param-optional { background: var(--code-bg); color: var(--text-muted); padding: 1px 6px; border-radius: 3px; font-size: 10px; font-family: var(--font); }
+
+/* Try it out */
+.try-section { padding: 16px 20px; background: var(--bg-sidebar); }
+.try-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; background: var(--accent); color: white; border: none; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; }
+.try-btn:hover { background: var(--accent-hover); }
+.try-btn:disabled { opacity: .5; cursor: not-allowed; }
+.try-form { margin-top: 14px; display: none; }
+.try-form.show { display: block; }
+.try-field { margin-bottom: 10px; }
+.try-field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--text-muted); font-family: var(--font-mono); }
+.try-field input, .try-field textarea { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text); font-size: 13px; font-family: var(--font-mono); outline: none; }
+.try-field input:focus, .try-field textarea:focus { border-color: var(--accent); }
+.try-field textarea { min-height: 90px; resize: vertical; }
+.try-actions { display: flex; gap: 8px; margin-top: 12px; }
+.execute-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 20px; background: var(--accent); color: white; border: none; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; }
+.execute-btn:hover { background: var(--accent-hover); }
+.execute-btn:disabled { opacity: .5; cursor: not-allowed; }
+.cancel-try-btn { padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text-muted); font-size: 13px; cursor: pointer; }
+.cancel-try-btn:hover { background: var(--bg-hover); }
+
+/* Response panel */
+.response-panel { margin-top: 14px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.response-bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--bg-sidebar); border-bottom: 1px solid var(--border); font-size: 12px; }
+.status-chip { font-size: 12px; font-weight: 700; font-family: var(--font-mono); padding: 2px 8px; border-radius: 4px; }
+.status-2xx { background: var(--green-bg); color: var(--green-text); }
+.status-3xx { background: var(--blue-bg); color: var(--blue-text); }
+.status-4xx { background: var(--yellow-bg); color: var(--yellow-text); }
+.status-5xx { background: var(--red-bg); color: var(--red-text); }
+.response-time { color: var(--text-muted); margin-left: auto; }
+.response-body { padding: 14px; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; overflow-x: auto; max-height: 360px; overflow-y: auto; white-space: pre; background: var(--bg); }
+.response-headers { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); }
+.cors-warn { margin-top: 10px; padding: 8px 12px; background: var(--yellow-bg); border-radius: var(--radius); font-size: 12px; color: var(--yellow-text); }
+
+/* Welcome / empty states */
+.empty-state { text-align: center; padding: 60px 40px; }
+.empty-icon { font-size: 48px; margin-bottom: 16px; }
+.empty-state h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+.empty-state p { color: var(--text-muted); max-width: 380px; margin: 0 auto 16px; }
+.empty-state code { background: var(--code-bg); padding: 4px 10px; border-radius: var(--radius); font-family: var(--font-mono); font-size: 13px; }
+
+/* Bootstrap panel */
+.bootstrap-wrap { max-width: 580px; margin: 0 auto; padding: 48px 0; }
+.bootstrap-hero { text-align: center; margin-bottom: 40px; }
+.bootstrap-hero-icon { font-size: 52px; margin-bottom: 16px; }
+.bootstrap-hero h1 { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
+.bootstrap-hero p { color: var(--text-muted); font-size: 15px; max-width: 420px; margin: 0 auto; }
+.bootstrap-steps { display: flex; flex-direction: column; gap: 12px; margin-bottom: 32px; }
+.bootstrap-step { display: flex; align-items: flex-start; gap: 14px; padding: 16px 18px; background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: var(--radius); }
+.bootstrap-step.done { border-color: var(--green); background: var(--green-bg); }
+.bootstrap-step.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
+.step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+.bootstrap-step.done .step-num { background: var(--green); }
+.step-content { flex: 1; min-width: 0; }
+.step-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.step-desc { font-size: 13px; color: var(--text-muted); }
+.step-desc code { font-family: var(--font-mono); background: var(--code-bg); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+.step-check { font-size: 18px; flex-shrink: 0; margin-top: 4px; }
+.bootstrap-btn { width: 100%; padding: 14px 24px; background: var(--accent); color: white; border: none; border-radius: var(--radius); font-size: 15px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: background .15s; }
+.bootstrap-btn:hover { background: var(--accent-hover); }
+.bootstrap-btn:disabled { opacity: .6; cursor: not-allowed; }
+.bootstrap-result { margin-top: 20px; padding: 16px 18px; background: var(--green-bg); border: 1px solid var(--green); border-radius: var(--radius); }
+.bootstrap-result-title { font-weight: 700; color: var(--green-text); margin-bottom: 8px; font-size: 14px; }
+.bootstrap-result-files { font-family: var(--font-mono); font-size: 12px; color: var(--green-text); line-height: 1.8; }
+.bootstrap-claude { margin-top: 12px; padding: 14px 16px; background: var(--accent-light); border: 1px solid var(--accent); border-radius: var(--radius); }
+.bootstrap-claude-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); margin-bottom: 8px; }
+.bootstrap-claude-cmd { font-family: var(--font-mono); font-size: 13px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; cursor: pointer; user-select: all; color: var(--text); }
+.bootstrap-claude-cmd:hover { border-color: var(--accent); }
+.copy-hint { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+/* ── Health Check ── */
+.health-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+.health-title { font-size: 26px; font-weight: 800; margin-bottom: 4px; }
+.health-subtitle { font-size: 13px; color: var(--text-muted); }
+.health-overall { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 700; }
+.health-ok { background: var(--green-bg); color: var(--green-text); }
+.health-warn { background: var(--yellow-bg); color: var(--yellow-text); }
+.health-crit { background: var(--red-bg); color: var(--red-text); }
+.health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 32px; }
+.health-card { background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+.health-card-val { font-size: 32px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+.health-card-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+.health-card.issue .health-card-val { color: var(--red); }
+.health-card.warn-card .health-card-val { color: var(--yellow); }
+.health-card.ok .health-card-val { color: var(--green); }
+.health-section-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.health-section { margin-bottom: 28px; }
+.drift-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; background: var(--bg); }
+.drift-sev { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 3px; flex-shrink: 0; margin-top: 2px; }
+.drift-sev.high { background: var(--red-bg); color: var(--red-text); }
+.drift-sev.medium { background: var(--yellow-bg); color: var(--yellow-text); }
+.drift-sev.low { background: var(--code-bg); color: var(--text-muted); }
+.drift-module { font-weight: 600; font-size: 13px; }
+.drift-detail { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.drift-detail span { font-family: var(--font-mono); background: var(--code-bg); padding: 0 4px; border-radius: 3px; font-size: 11px; margin-right: 3px; }
+.complexity-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; background: var(--bg); }
+.complexity-score { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; flex-shrink: 0; }
+.score-bad { background: var(--red-bg); color: var(--red-text); }
+.score-warn { background: var(--yellow-bg); color: var(--yellow-text); }
+.score-ok { background: var(--green-bg); color: var(--green-text); }
+.complexity-file { font-family: var(--font-mono); font-size: 12px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.complexity-tags { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
+.complexity-tag { font-size: 11px; background: var(--code-bg); color: var(--text-muted); padding: 1px 7px; border-radius: 3px; }
+.complexity-tag.crit { background: var(--red-bg); color: var(--red-text); }
+.health-empty { text-align: center; padding: 20px; color: var(--text-muted); font-size: 13px; }
+.health-refresh { padding: 7px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text-muted); font-size: 12px; cursor: pointer; }
+.health-refresh:hover { background: var(--bg-hover); }
+
+/* Misc */
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#sidebar::-webkit-scrollbar, #main::-webkit-scrollbar { width: 5px; }
+#sidebar::-webkit-scrollbar-thumb, #main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+@media (max-width: 768px) { #app { grid-template-columns: 1fr; } #sidebar { display: none; } #doc-wrap { padding: 24px 20px 60px; } }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header id="header">
+    <div class="logo" onclick="goHome()">
+      <div class="logo-icon">📋</div>DocuTrack
+    </div>
+    <div class="header-sep"></div>
+    <span id="project-name">loading…</span>
+    <div id="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="search" placeholder="Search docs…" autocomplete="off">
+      <span class="search-kbd">⌘K</span>
+    </div>
+    <div class="header-right">
+      <div id="coverage-badge">
+        <span class="coverage-dot" id="cov-dot"></span>
+        <span id="cov-pct">–%</span>
+        <span style="color:var(--text-muted);font-weight:400">coverage</span>
+      </div>
+      <button id="theme-toggle" title="Toggle dark mode">🌙</button>
+      <span class="live-pill"><span class="live-dot"></span>live</span>
+    </div>
+  </header>
+
+  <aside id="sidebar">
+    <div class="nav-section">
+      <div class="nav-section-title">Overview</div>
+      <div id="nav-arch"></div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-title">Modules</div>
+      <div id="nav-modules"></div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-title">Decisions</div>
+      <div id="nav-decisions"></div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-title">API</div>
+      <div id="nav-api-explorer"></div>
+      <div id="nav-api-docs"></div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-title">Health</div>
+      <div id="nav-health"></div>
+    </div>
+    <div id="coverage-section">
+      <div class="coverage-label">
+        <span>Doc coverage</span>
+        <span id="cov-label">–%</span>
+      </div>
+      <div class="coverage-bar"><div class="coverage-fill" id="cov-bar" style="width:0%"></div></div>
+    </div>
+    <div style="padding:12px 16px 8px;border-top:1px solid var(--border);margin-top:8px">
+      <button onclick="showRegenPanel()" style="width:100%;padding:7px 12px;border:1px solid var(--border);background:var(--bg);color:var(--text-muted);border-radius:var(--radius);font-size:12px;cursor:pointer;text-align:left;display:flex;align-items:center;gap:6px">
+        <span>✨</span><span>Regenerate docs</span>
+      </button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div id="doc-wrap">
+      <div id="pending-banner">
+        ⚠ <strong id="pending-count">0</strong>&nbsp;file(s) modified without documentation.
+        Run <code style="margin-left:4px">docutrack status</code> for details.
+      </div>
+      <div id="doc-content">
+        <div class="empty-state">
+          <div class="empty-icon">📋</div>
+          <h2>Welcome to DocuTrack</h2>
+          <p>Living documentation for your project. Select a page from the sidebar.</p>
+          <span class="spinner"></span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+'use strict'
+
+// ── State ──────────────────────────────────────────────────────────────────
+const state = {
+  tree: null,
+  active: null,   // file path or 'api-explorer' or 'health-check'
+  query: '',
+  view: 'docs',   // 'docs' | 'api-explorer' | 'health-check'
+  staleSet: new Set(),
+  healthBadge: 0,  // number of critical health issues
+  lang: 'es',     // 'es' | 'en' — language for AI doc generation
+  generating: false,
+  generationTotal: 0,
+  generationLog: [],  // { icon, color, file } — persisted to replay on panel re-enter
+}
+
+const api = {
+  spec: null,
+  baseUrl: localStorage.getItem('dt-baseUrl') || 'http://localhost:3000',
+  token: localStorage.getItem('dt-token') || '',
+  showAuth: false,
+  open: {},       // endpointId -> boolean
+  tryOpen: {},    // endpointId -> boolean
+  responses: {},  // endpointId -> response object
+}
+
+// ── Marked ────────────────────────────────────────────────────────────────
+marked.use({
+  gfm: true,
+  renderer: {
+    code({ text, lang }) {
+      if (lang === 'mermaid') {
+        return `<div class="mermaid-wrap"><div class="mermaid">${esc(text)}</div></div>`
+      }
+      return `<pre><code class="language-${esc(lang||'')}">${esc(text)}</code></pre>`
+    }
+  }
+})
+mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose' })
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+async function boot() {
+  setTheme(localStorage.getItem('dt-theme') || 'light')
+  await refreshTree()
+  await refreshStatus()
+  connectSSE()
+  document.getElementById('search').addEventListener('input', e => {
+    state.query = e.target.value.trim()
+    renderNav()
+  })
+  document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); document.getElementById('search').focus() }
+    if (e.key === 'Escape') document.getElementById('search').blur()
+  })
+}
+
+// ── Tree / nav ─────────────────────────────────────────────────────────────
+async function refreshTree() {
+  const tree = await get('/api/tree')
+  if (!tree) return
+  state.tree = tree
+
+  // Project name from package.json
+  try {
+    const r = await fetch('/api/content?path=package.json')
+    if (r.ok) { const j = JSON.parse(await r.text()); if (j.name) { document.getElementById('project-name').textContent = j.name; document.title = `DocuTrack — ${j.name}` } }
+  } catch { /* ok */ }
+
+  renderNav()
+  const hasModules = tree.modules?.length > 0
+  if (!state.active) {
+    if (hasModules && tree.architecture) loadFile(tree.architecture)
+    else showWelcome()
+  } else if (state.active === 'bootstrap' && hasModules) {
+    // Modules just appeared — navigate to architecture
+    if (tree.architecture) loadFile(tree.architecture)
+  }
+}
+
+function renderNav() {
+  const { tree, query, active } = state
+  if (!tree) return
+  const q = query.toLowerCase()
+
+  // Architecture
+  const archEl = document.getElementById('nav-arch')
+  if (tree.architecture) {
+    archEl.innerHTML = matches('architecture', q)
+      ? navItem(tree.architecture, '🏗', 'Architecture', active === tree.architecture)
+      : ''
+  } else {
+    archEl.innerHTML = '<div class="nav-empty">Not created yet</div>'
+  }
+
+  renderSection('nav-modules', tree.modules, '📦', q, active)
+  renderSection('nav-decisions', tree.decisions, '📝', q, active)
+
+  // API Explorer special entry
+  const explorerEl = document.getElementById('nav-api-explorer')
+  const epCount = api.spec ? Object.values(api.spec.paths || {}).reduce((n, p) => n + Object.keys(p).length, 0) : 0
+  const explorerMatch = !q || 'api explorer'.includes(q)
+  explorerEl.innerHTML = explorerMatch
+    ? `<div class="nav-item${active === 'api-explorer' ? ' active' : ''}" onclick="showApiExplorer()">
+        <span class="nav-icon">⚡</span>API Explorer
+        ${epCount > 0 ? `<span class="nav-badge">${epCount}</span>` : ''}
+       </div>`
+    : ''
+
+  // API docs (markdown files)
+  renderSection('nav-api-docs', tree.api, '📄', q, active)
+
+  // Health Check nav entry
+  const healthMatch = !q || 'health check'.includes(q)
+  const healthHasIssue = state.healthBadge
+  document.getElementById('nav-health').innerHTML = healthMatch
+    ? `<div class="nav-item${active === 'health-check' ? ' active' : ''}" onclick="showHealthCheck()">
+        <span class="nav-icon">🩺</span>Health Check
+        ${healthHasIssue ? `<span class="nav-badge" style="background:var(--red-bg);color:var(--red-text)">${healthHasIssue}</span>` : ''}
+       </div>` : ''
+}
+
+function renderSection(id, items, icon, q, active) {
+  const el = document.getElementById(id)
+  if (!items?.length) { el.innerHTML = '<div class="nav-empty">No docs yet</div>'; return }
+  const filtered = q ? items.filter(i => i.name.toLowerCase().includes(q)) : items
+  el.innerHTML = filtered.length
+    ? filtered.map(i => navItem(i.path, icon, fmtName(i.name), active === i.path)).join('')
+    : ''
+}
+
+function navItem(p, icon, label, isActive) {
+  const isStale = state.staleSet.has(p)
+  const staleTag = isStale ? '<span class="nav-stale">stale</span>' : ''
+  return `<div class="nav-item${isActive ? ' active' : ''}" onclick="loadFile('${ea(p)}')">`
+    + `<span class="nav-icon">${icon}</span>${esc(label)}${staleTag}</div>`
+}
+
+function fmtName(n) {
+  return n.replace(/^ADR-\d+-/, 'ADR: ').replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase())
+}
+
+function matches(str, q) { return !q || str.toLowerCase().includes(q) }
+
+// ── Doc viewer ─────────────────────────────────────────────────────────────
+async function loadFile(filePath) {
+  if (!filePath) return
+  state.active = filePath
+  state.view = 'docs'
+  renderNav()
+
+  const el = document.getElementById('doc-content')
+  el.innerHTML = '<div style="padding:40px;text-align:center"><span class="spinner"></span></div>'
+
+  const r = await fetch(`/api/content?path=${encodeURIComponent(filePath)}`)
+  if (!r.ok) { el.innerHTML = `<p style="color:var(--red);padding:40px">Could not load: ${esc(filePath)}</p>`; return }
+
+  el.innerHTML = marked.parse(await r.text())
+  document.getElementById('main').scrollTo({ top: 0 })
+  await mermaid.run({ nodes: document.querySelectorAll('#doc-content .mermaid') })
+}
+
+function showWelcome() {
+  const hasModules = state.tree?.modules?.length > 0
+  if (!hasModules) {
+    showBootstrap()
+  } else {
+    document.getElementById('doc-content').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📋</div>
+        <h2>Welcome to DocuTrack</h2>
+        <p>Living documentation for your project. Select a page from the sidebar to get started.</p>
+      </div>`
+  }
+}
+
+function showBootstrap() {
+  state.active = 'bootstrap'
+  const el = document.getElementById('doc-content')
+  el.innerHTML = `
+    <div class="bootstrap-wrap">
+      <div class="bootstrap-hero">
+        <div class="bootstrap-hero-icon">🚀</div>
+        <h1>Set up your docs</h1>
+        <p>This project doesn't have documentation yet. Let's generate it from your existing code in two steps.</p>
+      </div>
+
+      <div class="bootstrap-steps">
+        <div class="bootstrap-step done" id="step-init">
+          <span class="step-num">1</span>
+          <div class="step-content">
+            <div class="step-title">DocuTrack initialized</div>
+            <div class="step-desc">Hooks, templates, and slash commands are installed.</div>
+          </div>
+          <span class="step-check">✅</span>
+        </div>
+
+        <div class="bootstrap-step active" id="step-scan">
+          <span class="step-num">2</span>
+          <div class="step-content">
+            <div class="step-title">Scan your source files</div>
+            <div class="step-desc">Queues all existing files so the AI agent knows what to document.</div>
+          </div>
+        </div>
+
+        <div class="bootstrap-step" id="step-agent">
+          <span class="step-num">3</span>
+          <div class="step-content">
+            <div class="step-title">Run the documentalista agent</div>
+            <div class="step-desc">Tell Claude Code to document everything — docs appear here in real-time.</div>
+          </div>
+        </div>
+      </div>
+
+      <button class="bootstrap-btn" id="scan-btn" onclick="runScan()">
+        <span id="scan-btn-icon">⚡</span>
+        <span id="scan-btn-label">Scan project files</span>
+      </button>
+
+      <div id="scan-result" style="display:none"></div>
+    </div>`
+}
+
+async function runScan() {
+  const btn = document.getElementById('scan-btn')
+  const icon = document.getElementById('scan-btn-icon')
+  const label = document.getElementById('scan-btn-label')
+  btn.disabled = true
+  icon.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:white"></span>'
+  label.textContent = 'Scanning…'
+
+  let data
+  try {
+    const r = await fetch('/api/scan', { method: 'POST' })
+    data = await r.json()
+  } catch {
+    btn.disabled = false
+    icon.textContent = '⚡'
+    label.textContent = 'Scan project files'
+    return
+  }
+
+  // Mark step 2 done, activate step 3
+  document.getElementById('step-scan').classList.remove('active')
+  document.getElementById('step-scan').classList.add('done')
+  document.getElementById('step-scan').innerHTML += '<span class="step-check">✅</span>'
+  document.getElementById('step-agent').classList.add('active')
+
+  // Update button to disabled with success state
+  btn.style.background = 'var(--green)'
+  btn.innerHTML = `✓ ${data.queued} file${data.queued !== 1 ? 's' : ''} queued`
+
+  // Show result + Claude command
+  const preview = data.files?.slice(0, 4).map(f => `  ${f}`).join('\n')
+    + (data.hasMore ? `\n  …and more` : '')
+
+  document.getElementById('scan-result').style.display = 'block'
+  document.getElementById('scan-result').innerHTML = `
+    <div class="bootstrap-result">
+      <div class="bootstrap-result-title">✓ ${data.queued} files queued${data.skipped > 0 ? ` (${data.skipped} already queued)` : ''}</div>
+      ${preview ? `<div class="bootstrap-result-files">${esc(preview)}</div>` : ''}
+    </div>
+    <div id="step3-generate" style="margin-top:12px">
+      <div style="display:flex;justify-content:center;gap:0;margin-bottom:12px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;margin-left:auto;margin-right:auto">
+        <button id="lang-es" onclick="setLang('es')" style="padding:6px 18px;border:none;background:var(--accent);color:white;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s">🇪🇸 Español</button>
+        <button id="lang-en" onclick="setLang('en')" style="padding:6px 18px;border:none;background:var(--bg-secondary);color:var(--text-muted);font-size:13px;cursor:pointer;transition:background .15s">🇺🇸 English</button>
+      </div>
+      <button class="bootstrap-btn" id="gen-btn" onclick="runGenerate()">
+        <span id="gen-btn-icon">✨</span>
+        <span id="gen-btn-label">Generate docs with AI</span>
+      </button>
+      <p style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:8px">
+        Uses Claude Haiku — reads each file and writes the docs automatically
+      </p>
+    </div>`
+
+  // Refresh status badge
+  await refreshStatus()
+}
+
+function setLang(lang) {
+  state.lang = lang
+  const es = document.getElementById('lang-es')
+  const en = document.getElementById('lang-en')
+  if (!es || !en) return
+  if (lang === 'es') {
+    es.style.background = 'var(--accent)'; es.style.color = 'white'
+    en.style.background = 'var(--bg-secondary)'; en.style.color = 'var(--text-muted)'
+  } else {
+    en.style.background = 'var(--accent)'; en.style.color = 'white'
+    es.style.background = 'var(--bg-secondary)'; es.style.color = 'var(--text-muted)'
+  }
+}
+
+async function runGenerate(force = false) {
+  const lang = state.lang || 'es'
+  const btn = document.getElementById('gen-btn')
+  if (!btn) return
+  btn.disabled = true
+  document.getElementById('gen-btn-icon').innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:white;display:inline-block"></span>'
+  document.getElementById('gen-btn-label').textContent = 'Starting…'
+
+  let data
+  try {
+    const r = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lang, force }),
+    })
+    data = await r.json()
+  } catch (e) {
+    btn.disabled = false
+    document.getElementById('gen-btn-icon').textContent = '✨'
+    document.getElementById('gen-btn-label').textContent = 'Generate docs with AI'
+    return
+  }
+
+  if (data.error === 'no_api_key') {
+    btn.disabled = false
+    document.getElementById('gen-btn-icon').textContent = '✨'
+    document.getElementById('gen-btn-label').textContent = 'Generate docs with AI'
+    document.getElementById('step3-generate').innerHTML += `
+      <div style="margin-top:12px;padding:14px 16px;background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:var(--radius);font-size:13px;color:var(--yellow-text)">
+        <strong>API key not found.</strong> Add to your shell or <code>.env.local</code>:<br>
+        <code style="display:block;margin-top:8px;font-size:12px;user-select:all">ANTHROPIC_API_KEY=sk-ant-...</code>
+        Then restart the server and try again.
+      </div>`
+    return
+  }
+
+  if (data.error) {
+    btn.disabled = false
+    document.getElementById('gen-btn-icon').textContent = '✨'
+    document.getElementById('gen-btn-label').textContent = 'Generate docs with AI'
+    return
+  }
+
+  // Generation started — swap UI to progress view
+  const total = data.total || 0
+  const stepAgent = document.getElementById('step-agent')
+  if (stepAgent) stepAgent.classList.add('done')
+  btn.style.display = 'none'
+
+  document.getElementById('step3-generate').innerHTML = `
+    <div id="gen-progress-wrap" style="margin-top:4px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px">
+        <span style="font-weight:600">Generating documentation…</span>
+        <span id="gen-counter" style="color:var(--text-muted)">0 / ${total}</span>
+      </div>
+      <div style="height:4px;background:var(--border);border-radius:2px;margin-bottom:14px;overflow:hidden">
+        <div id="gen-bar" style="height:100%;width:0%;background:var(--accent);border-radius:2px;transition:width .3s"></div>
+      </div>
+      <div id="gen-log" style="font-family:var(--font-mono);font-size:12px;max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:4px"></div>
+    </div>`
+
+  state.generating = true
+  state.generationTotal = total
+  state.generationDone = 0
+  state.generationLog = []
+}
+
+function handleProgressEvent(raw) {
+  // format: "progress:done/total:status:filepath"
+  if (!raw.startsWith('progress:')) return
+  const parts = raw.slice(9).split(':')
+  const counter = parts[0]   // "3/31"
+  const status = parts[1]    // done | skip | working | error
+  const file = parts.slice(2).join(':')
+
+  const [done, total] = counter.split('/').map(Number)
+  state.generationDone = done
+
+  const icon = status === 'done' ? '✓' : status === 'skip' ? '–' : status === 'error' ? '✗' : '…'
+  const color = status === 'done' ? 'var(--green-text)' : status === 'error' ? 'var(--red-text)' : status === 'skip' ? 'var(--text-muted)' : 'var(--accent)'
+
+  // Persist completed entries so we can replay when returning to the panel
+  if (status !== 'working') state.generationLog.push({ icon, color, file })
+
+  const bar = document.getElementById('gen-bar')
+  const cnt = document.getElementById('gen-counter')
+  const log = document.getElementById('gen-log')
+
+  if (bar) bar.style.width = `${Math.round((done / total) * 100)}%`
+  if (cnt) cnt.textContent = `${done} / ${total}`
+  if (!log) return
+
+  const row = document.createElement('div')
+  row.style.cssText = `display:flex;gap:8px;align-items:baseline;color:${color}`
+  row.innerHTML = `<span style="flex-shrink:0;font-weight:700">${icon}</span><span style="color:var(--text-muted)">${esc(file)}</span>`
+
+  if (status === 'working') {
+    const existing = log.querySelector('[data-working]')
+    if (existing) existing.remove()
+    row.setAttribute('data-working', '1')
+  }
+  log.appendChild(row)
+  log.scrollTop = log.scrollHeight
+}
+
+function handleDoneEvent(raw) {
+  if (!raw.startsWith('done:')) return
+  state.generating = false
+  const count = raw.slice(5)
+  const log = document.getElementById('gen-log')
+  const bar = document.getElementById('gen-bar')
+  if (bar) bar.style.background = 'var(--green)'
+  const cnt = document.getElementById('gen-counter')
+  if (cnt) cnt.textContent = `${count} files documented`
+  if (log) {
+    const row = document.createElement('div')
+    row.style.cssText = 'margin-top:8px;font-weight:700;color:var(--green-text)'
+    row.textContent = `✓ Done! Documentation generated for ${count} files.`
+    log.appendChild(row)
+  }
+  // Show regenerate controls
+  const wrap = document.getElementById('gen-progress-wrap')
+  if (wrap) {
+    const lang = state.lang || 'es'
+    const otherLang = lang === 'es' ? 'en' : 'es'
+    const otherLabel = otherLang === 'es' ? '🇪🇸 Regenerate in Spanish' : '🇺🇸 Regenerate in English'
+    const div = document.createElement('div')
+    div.style.cssText = 'margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap'
+    div.innerHTML = `
+      <button onclick="setLang('${otherLang}');runGenerate(true)" style="padding:8px 16px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text);border-radius:var(--radius);font-size:13px;cursor:pointer;flex-shrink:0">
+        ${otherLabel}
+      </button>
+      <span style="font-size:12px;color:var(--text-muted)">Re-generates all docs in the selected language.</span>`
+    wrap.appendChild(div)
+  }
+}
+
+function showRegenPanel() {
+  state.active = 'regen'
+  renderNav()
+  const lang = state.lang || 'es'
+  const el = document.getElementById('doc-content')
+
+  if (state.generating) {
+    const done = state.generationDone || 0
+    const total = state.generationTotal || 0
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0
+    el.innerHTML = `
+      <div style="max-width:540px;margin:60px auto;padding:0 24px">
+        <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Generando documentación…</h2>
+        <p style="color:var(--text-muted);font-size:14px;margin-bottom:24px">La generación continúa en segundo plano. Puedes navegar libremente.</p>
+        <div id="step3-generate">
+          <div id="gen-progress-wrap">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px">
+              <span style="font-weight:600">Generando documentación…</span>
+              <span id="gen-counter" style="color:var(--text-muted)">${done} / ${total}</span>
+            </div>
+            <div style="height:4px;background:var(--border);border-radius:2px;margin-bottom:14px;overflow:hidden">
+              <div id="gen-bar" style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px;transition:width .3s"></div>
+            </div>
+            <div id="gen-log" style="font-family:var(--font-mono);font-size:12px;max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:4px"></div>
+          </div>
+        </div>
+      </div>`
+    // Replay saved log entries
+    const log = el.querySelector('#gen-log')
+    for (const entry of state.generationLog) {
+      const row = document.createElement('div')
+      row.style.cssText = `display:flex;gap:8px;align-items:baseline;color:${entry.color}`
+      row.innerHTML = `<span style="flex-shrink:0;font-weight:700">${entry.icon}</span><span style="color:var(--text-muted)">${esc(entry.file)}</span>`
+      log.appendChild(row)
+    }
+    log.scrollTop = log.scrollHeight
+    return
+  }
+
+  el.innerHTML = `
+    <div style="max-width:540px;margin:60px auto;padding:0 24px">
+      <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Regenerar documentación</h2>
+      <p style="color:var(--text-muted);font-size:14px;margin-bottom:28px">Re-genera todos los docs desde los archivos fuente. Sobreescribe la documentación existente.</p>
+
+      <div style="margin-bottom:20px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Idioma</div>
+        <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content">
+          <button id="lang-es" onclick="setLang('es')" style="padding:8px 20px;border:none;background:${lang==='es'?'var(--accent)':'var(--bg-secondary)'};color:${lang==='es'?'white':'var(--text-muted)'};font-size:13px;font-weight:600;cursor:pointer">🇪🇸 Español</button>
+          <button id="lang-en" onclick="setLang('en')" style="padding:8px 20px;border:none;background:${lang==='en'?'var(--accent)':'var(--bg-secondary)'};color:${lang==='en'?'white':'var(--text-muted)'};font-size:13px;cursor:pointer">🇺🇸 English</button>
+        </div>
+      </div>
+
+      <button class="bootstrap-btn" id="gen-btn" onclick="runGenerate(true)" style="max-width:300px">
+        <span id="gen-btn-icon">✨</span>
+        <span id="gen-btn-label">Regenerar todos los docs</span>
+      </button>
+      <p style="font-size:12px;color:var(--text-muted);margin-top:10px">Usa Claude Haiku. Sobreescribe los archivos .md existentes.</p>
+
+      <div id="step3-generate" style="margin-top:16px"></div>
+    </div>`
+}
+
+function goHome() {
+  if (state.tree?.architecture) loadFile(state.tree.architecture)
+  else showWelcome()
+}
+
+// ── API Explorer ───────────────────────────────────────────────────────────
+async function showApiExplorer() {
+  state.active = 'api-explorer'
+  state.view = 'api-explorer'
+  renderNav()
+
+  const el = document.getElementById('doc-content')
+  el.innerHTML = '<div style="padding:40px;text-align:center"><span class="spinner"></span></div>'
+  document.getElementById('main').scrollTo({ top: 0 })
+
+  if (!api.spec) {
+    const spec = await get('/api/openapi')
+    api.spec = spec
+  }
+
+  renderApiExplorer()
+}
+
+function renderApiExplorer() {
+  const el = document.getElementById('doc-content')
+
+  if (!api.spec || api.spec.error) {
+    el.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚡</div>
+        <h2>No API spec found</h2>
+        <p>Run the analyzer to auto-detect routes from your source code.</p>
+        <code>npx docutrack analyze</code>
+        <p style="margin-top:12px;font-size:13px">Or create <code>docs/api/openapi.json</code> manually (OpenAPI 3.0).</p>
+      </div>`
+    return
+  }
+
+  const { info, paths } = api.spec
+  const groups = groupByTag(paths)
+
+  const totalEp = Object.values(paths).reduce((n, p) => n + Object.keys(p).length, 0)
+
+  el.innerHTML = `
+    <div class="api-explorer">
+      <div class="api-explorer-header">
+        <div>
+          <h1 style="margin-bottom:4px">
+            ${esc(info.title)}
+            <span style="font-size:14px;color:var(--text-muted);font-weight:400">v${esc(info.version)}</span>
+          </h1>
+          <p style="color:var(--text-muted);font-size:13px;margin:4px 0 0">
+            ${totalEp} endpoint${totalEp !== 1 ? 's' : ''} detected
+          </p>
+        </div>
+        <div class="base-url-wrap">
+          <span class="base-url-label">Base URL</span>
+          <div class="base-url-row">
+            <input class="base-url-input" id="base-url-input" type="text"
+              value="${ea(api.baseUrl)}" placeholder="http://localhost:3000"
+              oninput="api.baseUrl=this.value;localStorage.setItem('dt-baseUrl',this.value)">
+            <button class="auth-toggle" onclick="toggleAuthRow()">🔑 Auth</button>
+          </div>
+          <div class="auth-row${api.showAuth ? ' show' : ''}" id="auth-row">
+            <span class="auth-label">Bearer</span>
+            <input class="auth-input" id="auth-input" type="text" placeholder="your-token-here"
+              value="${ea(api.token)}"
+              oninput="api.token=this.value;localStorage.setItem('dt-token',this.value)">
+          </div>
+        </div>
+      </div>
+      ${Object.entries(groups).map(([tag, eps]) => renderApiGroup(tag, eps)).join('')}
+    </div>`
+}
+
+function groupByTag(paths) {
+  const groups = {}
+  if (!paths) return groups
+  for (const [path, pathItem] of Object.entries(paths)) {
+    for (const method of ['get','post','put','patch','delete','options','head']) {
+      if (!pathItem[method]) continue
+      const op = pathItem[method]
+      const tag = op.tags?.[0] || 'default'
+      if (!groups[tag]) groups[tag] = []
+      groups[tag].push({ path, method: method.toUpperCase(), ...op })
+    }
+  }
+  return groups
+}
+
+function renderApiGroup(tag, endpoints) {
+  return `
+    <div class="api-group">
+      <div class="api-group-title">${esc(tag)}</div>
+      ${endpoints.map(ep => renderEndpointCard(ep)).join('')}
+    </div>`
+}
+
+function renderEndpointCard(ep) {
+  const id = epId(ep.method, ep.path)
+  const isOpen = api.open[id]
+  const params = ep.parameters || []
+  const hasBody = !!ep.requestBody
+  const pathParams = params.filter(p => p.in === 'path')
+  const queryParams = params.filter(p => p.in === 'query')
+  const headerParams = params.filter(p => p.in === 'header')
+
+  return `
+    <div class="endpoint-card${isOpen ? ' open' : ''}" id="card-${id}">
+      <div class="endpoint-header" onclick="toggleEndpoint('${id}')">
+        <span class="method-badge badge-${ep.method.toLowerCase()}">${ep.method}</span>
+        <span class="endpoint-path">${esc(ep.path)}</span>
+        ${ep.summary ? `<span class="endpoint-summary">${esc(ep.summary)}</span>` : ''}
+        <span class="endpoint-chevron">›</span>
+      </div>
+      <div class="endpoint-body">
+        ${ep.description ? `<div class="endpoint-section"><p style="color:var(--text-muted);font-size:14px;margin:0">${esc(ep.description)}</p></div>` : ''}
+        ${params.length ? `
+          <div class="endpoint-section">
+            <div class="section-title">Parameters</div>
+            <table class="params-table">
+              <thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr></thead>
+              <tbody>${params.map(p => `
+                <tr>
+                  <td>${esc(p.name)}</td>
+                  <td>${esc(p.in)}</td>
+                  <td>${esc(p.schema?.type || 'string')}</td>
+                  <td>${p.required ? '<span class="param-required">required</span>' : '<span class="param-optional">optional</span>'}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>` : ''}
+        ${hasBody ? `
+          <div class="endpoint-section">
+            <div class="section-title">Request Body</div>
+            <pre style="background:var(--code-bg);padding:12px;border-radius:var(--radius);font-size:12px;overflow-x:auto">${esc(JSON.stringify(ep.requestBody?.content?.['application/json']?.schema || {}, null, 2))}</pre>
+          </div>` : ''}
+        ${ep.responses ? `
+          <div class="endpoint-section">
+            <div class="section-title">Responses</div>
+            ${Object.entries(ep.responses).map(([code, r]) => `
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:13px">
+                <span class="status-chip ${statusClass(code)}">${code}</span>
+                <span style="color:var(--text-muted)">${esc(r.description || '')}</span>
+              </div>`).join('')}
+          </div>` : ''}
+        <div class="try-section">
+          ${renderTrySection(id, ep, pathParams, queryParams, headerParams, hasBody)}
+        </div>
+      </div>
+    </div>`
+}
+
+function renderTrySection(id, ep, pathParams, queryParams, headerParams, hasBody) {
+  const tryOpen = api.tryOpen[id]
+  const resp = api.responses[id]
+
+  return `
+    <button class="try-btn" onclick="toggleTry('${id}',event)">
+      ${tryOpen ? '✕ Close' : '▶ Try it out'}
+    </button>
+    <div class="try-form${tryOpen ? ' show' : ''}" id="try-${id}">
+      ${pathParams.map(p => `
+        <div class="try-field">
+          <label>${esc(p.name)} <span style="color:var(--red-text);font-size:10px">path</span></label>
+          <input type="text" id="${id}-path-${esc(p.name)}" placeholder="${esc(p.name)}">
+        </div>`).join('')}
+      ${queryParams.map(p => `
+        <div class="try-field">
+          <label>${esc(p.name)} <span style="color:var(--text-muted);font-size:10px">query</span></label>
+          <input type="text" id="${id}-query-${esc(p.name)}" placeholder="${esc(p.schema?.type || 'string')}">
+        </div>`).join('')}
+      ${hasBody ? `
+        <div class="try-field">
+          <label>Request Body <span style="color:var(--text-muted);font-size:10px">application/json</span></label>
+          <textarea id="${id}-body" placeholder="{}"></textarea>
+        </div>` : ''}
+      <div class="try-actions">
+        <button class="execute-btn" id="exec-${id}" onclick="executeRequest('${id}','${esc(ep.method)}','${ea(ep.path)}',${hasBody})">
+          ▶ Execute
+        </button>
+        <button class="cancel-try-btn" onclick="toggleTry('${id}',event)">Cancel</button>
+      </div>
+      ${resp ? renderResponse(resp) : ''}
+    </div>`
+}
+
+function renderResponse(resp) {
+  const cls = resp.status >= 500 ? 'status-5xx'
+    : resp.status >= 400 ? 'status-4xx'
+    : resp.status >= 300 ? 'status-3xx'
+    : 'status-2xx'
+
+  let body = resp.body
+  try { body = JSON.stringify(JSON.parse(body), null, 2) } catch { /* raw */ }
+
+  return `
+    <div class="response-panel">
+      <div class="response-bar">
+        <span class="status-chip ${cls}">${resp.status} ${resp.statusText}</span>
+        <span style="color:var(--text-muted);font-size:12px">${resp.contentType || ''}</span>
+        <span class="response-time">${resp.ms}ms</span>
+      </div>
+      <div class="response-body">${esc(body)}</div>
+    </div>
+    ${resp.corsError ? `<div class="cors-warn">⚠ CORS error — the API server must allow requests from this origin. Add <code>Access-Control-Allow-Origin: *</code> to its headers, or run DocuTrack on the same port.</div>` : ''}`
+}
+
+// ── Execute request ────────────────────────────────────────────────────────
+async function executeRequest(id, method, pathTemplate, hasBody) {
+  const btn = document.getElementById(`exec-${id}`)
+  btn.disabled = true
+  btn.textContent = '…'
+
+  // Build URL
+  let url = api.baseUrl.replace(/\/$/, '') + pathTemplate
+  // Substitute path params
+  url = url.replace(/\{([^}]+)\}/g, (_, name) => {
+    const input = document.getElementById(`${id}-path-${name}`)
+    return input ? encodeURIComponent(input.value || `:${name}`) : `:${name}`
+  })
+
+  // Collect query params from spec
+  const queryEl = document.querySelectorAll(`[id^="${id}-query-"]`)
+  const qs = []
+  queryEl.forEach(el => {
+    const key = el.id.replace(`${id}-query-`, '')
+    if (el.value) qs.push(`${encodeURIComponent(key)}=${encodeURIComponent(el.value)}`)
+  })
+  if (qs.length) url += '?' + qs.join('&')
+
+  const headers = { 'Content-Type': 'application/json' }
+  if (api.token) headers['Authorization'] = `Bearer ${api.token}`
+
+  let body = undefined
+  if (hasBody) {
+    const bodyEl = document.getElementById(`${id}-body`)
+    body = bodyEl?.value?.trim() || '{}'
+  }
+
+  const t0 = Date.now()
+  let resp
+
+  try {
+    const fetchResp = await fetch(url, {
+      method,
+      headers,
+      body: body && method !== 'GET' ? body : undefined,
+    })
+    const text = await fetchResp.text()
+    resp = {
+      status: fetchResp.status,
+      statusText: fetchResp.statusText,
+      contentType: fetchResp.headers.get('content-type') || '',
+      body: text,
+      ms: Date.now() - t0,
+      corsError: false,
+    }
+  } catch (err) {
+    const isCors = err.message?.toLowerCase().includes('fetch') || err.name === 'TypeError'
+    resp = {
+      status: 0,
+      statusText: 'Network Error',
+      contentType: '',
+      body: err.message,
+      ms: Date.now() - t0,
+      corsError: isCors,
+    }
+  }
+
+  api.responses[id] = resp
+  btn.disabled = false
+  btn.textContent = '▶ Execute'
+
+  // Re-render just the try section by refreshing the response part
+  const tryDiv = document.getElementById(`try-${id}`)
+  // Remove old response panel if present
+  tryDiv.querySelectorAll('.response-panel, .cors-warn').forEach(e => e.remove())
+  tryDiv.insertAdjacentHTML('beforeend', renderResponse(resp))
+}
+
+// ── Interaction helpers ────────────────────────────────────────────────────
+function toggleEndpoint(id) {
+  api.open[id] = !api.open[id]
+  const card = document.getElementById(`card-${id}`)
+  if (api.open[id]) card.classList.add('open')
+  else card.classList.remove('open')
+}
+
+function toggleTry(id, e) {
+  e.stopPropagation()
+  api.tryOpen[id] = !api.tryOpen[id]
+  const form = document.getElementById(`try-${id}`)
+  if (api.tryOpen[id]) form.classList.add('show')
+  else form.classList.remove('show')
+  // Update button label
+  const btn = form.previousElementSibling
+  if (btn?.classList.contains('try-btn')) {
+    btn.textContent = api.tryOpen[id] ? '✕ Close' : '▶ Try it out'
+  }
+}
+
+function toggleAuthRow() {
+  api.showAuth = !api.showAuth
+  document.getElementById('auth-row').classList.toggle('show', api.showAuth)
+}
+
+// ── Status ─────────────────────────────────────────────────────────────────
+async function refreshStatus() {
+  const s = await get('/api/status')
+  if (!s) return
+  const pct = s.coverage
+  document.getElementById('cov-pct').textContent = `${pct}%`
+  document.getElementById('cov-label').textContent = `${pct}%`
+  const bar = document.getElementById('cov-bar')
+  bar.style.width = `${pct}%`
+  bar.className = 'coverage-fill' + (pct < 50 ? ' bad' : pct < 80 ? ' warn' : '')
+  document.getElementById('cov-dot').style.background = pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--yellow)' : 'var(--red)'
+  const banner = document.getElementById('pending-banner')
+  if (s.pending > 0) { document.getElementById('pending-count').textContent = s.pending; banner.classList.add('show') }
+  else banner.classList.remove('show')
+
+  // Store stale map for nav rendering
+  state.staleSet = new Set((s.stale || []).map(x => x.doc))
+  renderNav()
+}
+
+// ── Health Check ───────────────────────────────────────────────────────────
+async function showHealthCheck() {
+  state.active = 'health-check'
+  state.view = 'health-check'
+  renderNav()
+
+  const el = document.getElementById('doc-content')
+  el.innerHTML = '<div style="padding:40px;text-align:center"><span class="spinner"></span></div>'
+  document.getElementById('main').scrollTo({ top: 0 })
+
+  const data = await get('/api/check')
+  if (!data) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🩺</div><h2>Health check unavailable</h2><p>Make sure DocuTrack is initialized.</p></div>`
+    return
+  }
+  renderHealthCheck(data)
+}
+
+function renderHealthCheck(data) {
+  const el = document.getElementById('doc-content')
+  const { pending, stale, drift, complexity, ok } = data
+
+  const criticalCount = complexity.critical?.length || 0
+  const highDrift = (drift || []).filter(d => d.severity === 'high').length
+  const totalIssues = pending + stale + highDrift + criticalCount
+  state.healthBadge = totalIssues
+  renderNav()
+
+  const overallClass = ok ? 'health-ok' : totalIssues > 3 ? 'health-crit' : 'health-warn'
+  const overallText = ok ? '✓ Healthy' : `⚠ ${totalIssues} issue${totalIssues !== 1 ? 's' : ''}`
+
+  const scoreCard = (val, label, cls) => `
+    <div class="health-card ${cls}">
+      <div class="health-card-val">${val}</div>
+      <div class="health-card-label">${label}</div>
+    </div>`
+
+  const cards = [
+    scoreCard(pending, 'Pending files', pending > 0 ? 'warn-card' : 'ok'),
+    scoreCard(stale, 'Stale docs', stale > 0 ? 'warn-card' : 'ok'),
+    scoreCard(drift.length, 'Drifted modules', highDrift > 0 ? 'issue' : drift.length > 0 ? 'warn-card' : 'ok'),
+    scoreCard(complexity.summary?.critical || 0, 'Complex files', criticalCount > 0 ? 'issue' : 'ok'),
+  ].join('')
+
+  const driftSection = drift.length > 0 ? `
+    <div class="health-section">
+      <div class="health-section-title">📐 Documentation Drift</div>
+      ${drift.map(d => `
+        <div class="drift-row">
+          <span class="drift-sev ${d.severity}">${d.severity.toUpperCase()}</span>
+          <div>
+            <div class="drift-module">${esc(d.module)}</div>
+            ${d.undocumented?.length ? `<div class="drift-detail">+undocumented: ${d.undocumented.map(n => `<span>${esc(n)}</span>`).join('')}</div>` : ''}
+            ${d.orphaned?.length ? `<div class="drift-detail" style="margin-top:3px">−orphaned: ${d.orphaned.map(n => `<span>${esc(n)}</span>`).join('')}</div>` : ''}
+          </div>
+        </div>`).join('')}
+    </div>` : ''
+
+  const complexFiles = complexity.critical || []
+  const complexSection = complexFiles.length > 0 ? `
+    <div class="health-section">
+      <div class="health-section-title">📊 Complexity Hotspots</div>
+      ${complexFiles.map(f => {
+        const scoreClass = f.score < 40 ? 'score-bad' : f.score < 70 ? 'score-warn' : 'score-ok'
+        return `
+        <div class="complexity-row">
+          <div class="complexity-score ${scoreClass}">${f.score}</div>
+          <div class="complexity-file" title="${esc(f.file)}">${esc(f.file)}</div>
+          <div class="complexity-tags">
+            ${f.warnings.map(w => `<span class="complexity-tag${w.level === 'critical' ? ' crit' : ''}">${esc(w.message)}</span>`).join('')}
+          </div>
+        </div>`}).join('')}
+    </div>` : ''
+
+  const allGood = drift.length === 0 && complexFiles.length === 0 && pending === 0 && stale === 0
+  const emptyState = allGood ? `
+    <div class="health-empty" style="padding:40px">
+      <div style="font-size:48px;margin-bottom:12px">✅</div>
+      <p style="font-size:16px;font-weight:700;color:var(--text)">Documentation is fully healthy.</p>
+      <p>No pending files, no stale docs, no drift, no complexity issues.</p>
+    </div>` : ''
+
+  el.innerHTML = `
+    <div style="max-width:800px">
+      <div class="health-header">
+        <div>
+          <div class="health-title">Health Check</div>
+          <div class="health-subtitle">Documentation quality analysis</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="health-overall ${overallClass}">${overallText}</span>
+          <button class="health-refresh" onclick="showHealthCheck()">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="health-grid">${cards}</div>
+      ${emptyState}
+      ${driftSection}
+      ${complexSection}
+      ${(pending > 0 || stale > 0) ? `
+      <div class="health-section">
+        <div class="health-section-title">💡 Suggested Actions</div>
+        <div style="font-size:13px;color:var(--text-muted);line-height:2">
+          ${pending > 0 ? `<div>→ Run the <strong>documentalista</strong> subagent to clear ${pending} pending file${pending !== 1 ? 's' : ''}</div>` : ''}
+          ${stale > 0 ? `<div>→ Update ${stale} stale doc${stale !== 1 ? 's' : ''}, then run <code>docutrack clear</code></div>` : ''}
+          ${highDrift > 0 ? `<div>→ Add missing exports to docs for high-drift modules above</div>` : ''}
+          ${criticalCount > 0 ? `<div>→ Consider splitting the complex files listed above</div>` : ''}
+        </div>
+      </div>` : ''}
+    </div>`
+}
+
+// ── SSE ─────────────────────────────────────────────────────────────────────
+function connectSSE() {
+  const es = new EventSource('/events')
+  es.onmessage = async (e) => {
+    if (e.data.startsWith('progress:')) { handleProgressEvent(e.data); return }
+    if (e.data.startsWith('done:'))     { handleDoneEvent(e.data); return }
+    if (e.data !== 'reload') return
+
+    await refreshTree()
+    await refreshStatus()
+
+    if (state.view === 'api-explorer') {
+      api.spec = await get('/api/openapi')
+      renderApiExplorer()
+    } else if (state.view === 'health-check') {
+      const data = await get('/api/check')
+      if (data) renderHealthCheck(data)
+    } else if (state.active && state.active !== 'bootstrap' && state.active !== 'regen') {
+      await loadFile(state.active)
+    }
+    // If we were on bootstrap and modules now exist → navigate to arch
+    if (state.active === 'bootstrap' && state.tree?.modules?.length > 0) {
+      if (state.tree.architecture) loadFile(state.tree.architecture)
+    }
+  }
+  es.onerror = () => setTimeout(connectSSE, 3000)
+}
+
+// ── Theme ──────────────────────────────────────────────────────────────────
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark')
+})
+
+function setTheme(t) {
+  document.documentElement.setAttribute('data-theme', t)
+  document.getElementById('theme-toggle').textContent = t === 'dark' ? '☀️' : '🌙'
+  localStorage.setItem('dt-theme', t)
+  mermaid.initialize({ startOnLoad: false, theme: t === 'dark' ? 'dark' : 'neutral', securityLevel: 'loose' })
+}
+
+// ── Utils ──────────────────────────────────────────────────────────────────
+async function get(url) {
+  try { const r = await fetch(url); return r.ok ? r.json() : null } catch { return null }
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')
+}
+function ea(s) { return String(s||'').replace(/'/g,"\\'") }
+function epId(method, path) {
+  return `${method}-${path}`.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+}
+function statusClass(code) {
+  const n = parseInt(code)
+  if (n >= 500) return 'status-5xx'
+  if (n >= 400) return 'status-4xx'
+  if (n >= 300) return 'status-3xx'
+  return 'status-2xx'
+}
+
+boot()
+</script>
+</body>
+</html>
