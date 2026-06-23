@@ -6,6 +6,41 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.1.4] — 2026-06-23
+
+### Changed
+- **No API key required** — removed all direct Anthropic API calls from the viewer
+- Bootstrap panel, Regenerate panel, and ARCHITECTURE.md banner now show a copyable command to paste in Claude Code instead of a "Generate with AI" button
+- `setLang()` toggle now updates command text in real-time across all panels
+- Server.js simplified: removed `serveGenerate`, `serveGenerateArch`, `runGeneration`, `generateDoc`, `callClaude`, `readApiKey`, `scanSourceFiles` — server went from 694 → 369 lines
+
+---
+
+## [0.1.3] — 2026-06-23
+
+### Fixed
+- README: Stop hook never triggered docs automatically — corrected to "warns, then user tells Claude"
+- README: `npx docutrack init` → `docutrack serve` required global install — now explicit
+- README: `onboard` described as "AI-generated" — it assembles existing docs, no API call
+- README: `clear` command was missing from the commands table
+- README: added `--port`, `--json`, `--dry-run` flags and badge output path
+
+---
+
+## [0.1.2] — 2026-06-23
+
+### Added
+- **Hash-based URL routing** — each view has its own URL; reload restores the same page
+- **Command palette** doc search via `/api/search`
+
+### Fixed
+- README clarifies new project vs existing project flows
+- Empty code blocks no longer show Copy button
+- Heading anchor renderer handles undefined text gracefully
+- API Explorer "Try it out" error message distinguishes server-down from CORS
+
+---
+
 ## [0.1.1] — 2026-06-23
 
 ### Added
