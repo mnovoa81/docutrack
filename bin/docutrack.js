@@ -24,7 +24,9 @@ docutrack — Claude Code documentation plugin
 
 Usage:
   docutrack setup                         One-command setup: init + scan + start viewer
-  npx docutrack init                      Initialize DocuTrack in the current project
+  docutrack init                          Initialize DocuTrack (runs interactive questionnaire)
+  docutrack init --lang=es --description="<desc>" --audience=team --depth=standard
+                                          Non-interactive init (for Claude Code or CI)
   docutrack init --template <name>        Init with a specific stack template
   docutrack serve                         Start the documentation web viewer (port 4242)
   docutrack analyze                       Scan routes and generate docs/api/openapi.json

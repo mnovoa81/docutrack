@@ -24,8 +24,27 @@ const Q = {
   },
 }
 
-async function runQuestionnaire() {
-  // In non-interactive mode (CI, pipes) use sensible defaults silently
+function parseFlags(args) {
+  const get = (name) => {
+    const eq = args?.find(a => a.startsWith(`--${name}=`))
+    if (eq) return eq.slice(`--${name}=`.length)
+    const idx = args?.indexOf(`--${name}`)
+    if (idx !== undefined && idx !== -1 && args[idx + 1] && !args[idx + 1].startsWith('--')) return args[idx + 1]
+    return null
+  }
+  return { lang: get('lang'), description: get('description'), audience: get('audience'), depth: get('depth') }
+}
+
+async function runQuestionnaire(args) {
+  // Flags override everything — Claude (or CI) passes these directly
+  const flags = parseFlags(args)
+  if (flags.lang) {
+    const audience = ['onboarding', 'mixed', 'team'].includes(flags.audience) ? flags.audience : 'team'
+    const docDepth  = ['concise', 'detailed', 'standard'].includes(flags.depth) ? flags.depth : 'standard'
+    return { lang: flags.lang, projectDescription: flags.description || '', audience, docDepth }
+  }
+
+  // In non-interactive mode (CI, pipes) without flags: silent defaults
   if (!process.stdin.isTTY) {
     return { lang: 'en', projectDescription: '', audience: 'team', docDepth: 'standard' }
   }
@@ -231,7 +250,7 @@ async function run(args) {
 
   // ── 9. Questionnaire — language, description, audience, depth ─
   console.log('\n  ' + '─'.repeat(42))
-  const prefs = await runQuestionnaire()
+  const prefs = await runQuestionnaire(args)
 
   // ── 10. docutrack.config.json — merge template + prefs ────────
   {
