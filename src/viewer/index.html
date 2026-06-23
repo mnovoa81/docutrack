@@ -287,6 +287,37 @@ html, body { height: 100%; font-family: var(--font); color: var(--text); backgro
 #sidebar::-webkit-scrollbar, #main::-webkit-scrollbar { width: 5px; }
 #sidebar::-webkit-scrollbar-thumb, #main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 @media (max-width: 768px) { #app { grid-template-columns: 1fr; } #sidebar { display: none; } #doc-wrap { padding: 24px 20px 60px; } }
+
+/* ── Command Palette ── */
+.palette-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.48); z-index: 500; display: none; align-items: flex-start; justify-content: center; padding-top: 14vh; }
+.palette-overlay.open { display: flex; }
+.palette-box { width: 100%; max-width: 560px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 24px 64px rgba(0,0,0,.28); overflow: hidden; }
+.palette-input-wrap { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.palette-search-icon { font-size: 16px; color: var(--text-muted); flex-shrink: 0; }
+#palette-input { flex: 1; border: none; outline: none; font-size: 15px; background: transparent; color: var(--text); }
+#palette-input::placeholder { color: var(--text-muted); }
+.palette-esc { font-size: 11px; background: var(--border); color: var(--text-muted); padding: 2px 7px; border-radius: 4px; flex-shrink: 0; cursor: pointer; }
+.palette-results { max-height: 380px; overflow-y: auto; }
+.palette-group-header { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); padding: 8px 16px 4px; background: var(--bg-sidebar); }
+.palette-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; cursor: pointer; font-size: 13px; border-left: 2px solid transparent; }
+.palette-item.selected { background: var(--bg-active); color: var(--accent); border-left-color: var(--accent); }
+.palette-item-icon { width: 20px; text-align: center; flex-shrink: 0; }
+.palette-item-name { flex: 1; }
+.palette-item-section { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.palette-item-snippet { font-size: 11px; color: var(--text-muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.palette-empty { padding: 32px; text-align: center; color: var(--text-muted); font-size: 13px; }
+.palette-footer { padding: 8px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); display: flex; gap: 14px; background: var(--bg-sidebar); }
+.palette-footer kbd { background: var(--border); padding: 1px 5px; border-radius: 3px; font-family: var(--font-mono); }
+
+/* ── Copy button ── */
+.code-block-wrap { position: relative; }
+.copy-btn { position: absolute; top: 8px; right: 8px; padding: 3px 9px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text-muted); font-size: 11px; cursor: pointer; opacity: 0; transition: opacity .15s; z-index: 1; font-family: var(--font); }
+.code-block-wrap:hover .copy-btn { opacity: 1; }
+.copy-btn.copied { color: var(--green-text); border-color: var(--green); background: var(--green-bg); }
+
+/* ── Heading anchors ── */
+.heading-anchor { opacity: 0; margin-left: 6px; font-size: .72em; color: var(--text-muted); text-decoration: none; transition: opacity .15s; vertical-align: middle; }
+h2:hover .heading-anchor, h3:hover .heading-anchor { opacity: 1; }
 </style>
 </head>
 <body>
@@ -369,6 +400,23 @@ html, body { height: 100%; font-family: var(--font); color: var(--text); backgro
 
 </div>
 
+<!-- Command Palette -->
+<div id="palette-overlay" class="palette-overlay" onclick="onPaletteOverlayClick(event)">
+  <div class="palette-box">
+    <div class="palette-input-wrap">
+      <span class="palette-search-icon">🔍</span>
+      <input id="palette-input" placeholder="Search docs, jump to…" autocomplete="off" spellcheck="false">
+      <span class="palette-esc" onclick="closePalette()">ESC</span>
+    </div>
+    <div id="palette-results" class="palette-results"></div>
+    <div class="palette-footer">
+      <span><kbd>↑↓</kbd> navigate</span>
+      <span><kbd>↵</kbd> open</span>
+      <span><kbd>ESC</kbd> close</span>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>
@@ -406,7 +454,12 @@ marked.use({
       if (lang === 'mermaid') {
         return `<div class="mermaid-wrap"><div class="mermaid">${esc(text)}</div></div>`
       }
-      return `<pre><code class="language-${esc(lang||'')}">${esc(text)}</code></pre>`
+      return `<div class="code-block-wrap"><pre><code class="language-${esc(lang||'')}">${esc(text)}</code></pre><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>`
+    },
+    heading({ text, depth }) {
+      if (depth === 1) return `<h1>${text}</h1>\n`
+      const anchor = text.replace(/<[^>]+>/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      return `<h${depth} id="${anchor}">${text}<a class="heading-anchor" href="#${anchor}" onclick="copyAnchor(this,event)">#</a></h${depth}>\n`
     }
   }
 })
@@ -422,9 +475,25 @@ async function boot() {
     state.query = e.target.value.trim()
     renderNav()
   })
+  document.getElementById('palette-input').addEventListener('input', e => {
+    renderPaletteResults(e.target.value.trim())
+  })
   document.addEventListener('keydown', e => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); document.getElementById('search').focus() }
-    if (e.key === 'Escape') document.getElementById('search').blur()
+    const palOpen = document.getElementById('palette-overlay').classList.contains('open')
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault()
+      palOpen ? closePalette() : openPalette()
+      return
+    }
+    if (e.key === 'Escape') {
+      if (palOpen) { closePalette(); return }
+      document.getElementById('search').blur()
+    }
+    if (palOpen) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); paletteIdx = Math.min(paletteIdx + 1, paletteItems.length - 1); updatePaletteSelection(); scrollPaletteItem() }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); paletteIdx = Math.max(paletteIdx - 1, 0); updatePaletteSelection(); scrollPaletteItem() }
+      else if (e.key === 'Enter') { e.preventDefault(); selectPaletteItem(paletteIdx) }
+    }
   })
 }
 
@@ -1420,6 +1489,150 @@ function statusClass(code) {
   if (n >= 400) return 'status-4xx'
   if (n >= 300) return 'status-3xx'
   return 'status-2xx'
+}
+
+// ── Command Palette ───────────────────────────────────────────────────────────
+let paletteIdx = 0
+let paletteItems = []
+let paletteSearchTimer = null
+
+function openPalette() {
+  document.getElementById('palette-overlay').classList.add('open')
+  const inp = document.getElementById('palette-input')
+  inp.value = ''
+  inp.focus()
+  renderPaletteResults('')
+}
+
+function closePalette() {
+  document.getElementById('palette-overlay').classList.remove('open')
+}
+
+function onPaletteOverlayClick(e) {
+  if (e.target === document.getElementById('palette-overlay')) closePalette()
+}
+
+function renderPaletteResults(q) {
+  const { tree } = state
+  paletteItems = []
+  const lq = q.toLowerCase()
+
+  if (tree) {
+    if (tree.architecture && (!q || 'architecture'.includes(lq))) {
+      paletteItems.push({ icon: '🏗', name: 'Architecture', section: 'Overview', action: () => loadFile(tree.architecture) })
+    }
+    const addItems = (items, icon, section, fn) => {
+      if (!items?.length) return
+      for (const item of items) {
+        const name = fmtName(item.name)
+        if (!q || name.toLowerCase().includes(lq) || item.name.toLowerCase().includes(lq)) {
+          paletteItems.push({ icon, name, section, action: () => fn(item) })
+        }
+      }
+    }
+    addItems(tree.modules, '📦', 'Modules', m => loadFile(m.path))
+    addItems(tree.decisions, '📝', 'Decisions', d => loadFile(d.path))
+    addItems(tree.api, '📄', 'API', a => loadFile(a.path))
+  }
+  if (!q || 'api explorer'.includes(lq)) paletteItems.push({ icon: '⚡', name: 'API Explorer', section: 'Views', action: showApiExplorer })
+  if (!q || 'health check'.includes(lq)) paletteItems.push({ icon: '🩺', name: 'Health Check', section: 'Views', action: showHealthCheck })
+  if (!q || 'regenerate docs'.includes(lq)) paletteItems.push({ icon: '✨', name: 'Regenerate docs', section: 'Actions', action: showRegenPanel })
+
+  paintPalette()
+
+  // Debounced content search
+  clearTimeout(paletteSearchTimer)
+  if (q.length >= 2) {
+    paletteSearchTimer = setTimeout(() => fetchContentResults(q), 250)
+  }
+}
+
+async function fetchContentResults(q) {
+  try {
+    const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`)
+    if (!r.ok) return
+    const hits = await r.json()
+    if (!hits.length) return
+    // Append content hits (avoid duplicates with name matches)
+    const existing = new Set(paletteItems.map(i => i._path).filter(Boolean))
+    for (const hit of hits) {
+      if (existing.has(hit.path)) continue
+      paletteItems.push({ icon: '🔎', name: hit.title, section: 'Content', snippet: hit.snippet, _path: hit.path, action: () => loadFile(hit.path) })
+    }
+    paintPalette()
+  } catch { /* ok */ }
+}
+
+function paintPalette() {
+  const container = document.getElementById('palette-results')
+  if (!container) return
+
+  if (!paletteItems.length) {
+    container.innerHTML = '<div class="palette-empty">No results</div>'
+    return
+  }
+
+  const groups = {}
+  for (const item of paletteItems) {
+    if (!groups[item.section]) groups[item.section] = []
+    groups[item.section].push(item)
+  }
+
+  let flatIdx = 0
+  let html = ''
+  for (const [section, items] of Object.entries(groups)) {
+    html += `<div class="palette-group-header">${esc(section)}</div>`
+    for (const item of items) {
+      const i = flatIdx++
+      const sel = i === paletteIdx ? ' selected' : ''
+      html += `<div class="palette-item${sel}" onmouseenter="paletteIdx=${i};updatePaletteSelection()" onclick="selectPaletteItem(${i})">
+        <span class="palette-item-icon">${item.icon}</span>
+        <span class="palette-item-name">${esc(item.name)}</span>
+        ${item.snippet ? `<span class="palette-item-snippet">${esc(item.snippet)}</span>` : `<span class="palette-item-section">${esc(item.section)}</span>`}
+      </div>`
+    }
+  }
+  container.innerHTML = html
+}
+
+function selectPaletteItem(i) {
+  closePalette()
+  paletteItems[i]?.action()
+}
+
+function updatePaletteSelection() {
+  document.querySelectorAll('#palette-results .palette-item').forEach((el, i) => {
+    el.classList.toggle('selected', i === paletteIdx)
+  })
+}
+
+function scrollPaletteItem() {
+  const items = document.querySelectorAll('#palette-results .palette-item')
+  items[paletteIdx]?.scrollIntoView({ block: 'nearest' })
+}
+
+// ── Copy code ────────────────────────────────────────────────────────────────
+function copyCode(btn) {
+  const code = btn.previousElementSibling?.querySelector('code')
+  if (!code) return
+  navigator.clipboard.writeText(code.textContent).then(() => {
+    btn.textContent = '✓ Copied'
+    btn.classList.add('copied')
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied') }, 1500)
+  }).catch(() => {})
+}
+
+// ── Heading anchors ──────────────────────────────────────────────────────────
+function copyAnchor(a, e) {
+  e.preventDefault()
+  const url = location.href.split('#')[0] + a.getAttribute('href')
+  navigator.clipboard.writeText(url).then(() => {
+    const orig = a.textContent
+    a.textContent = '✓'
+    setTimeout(() => { a.textContent = orig }, 1200)
+  }).catch(() => {
+    location.hash = a.getAttribute('href')
+  })
 }
 
 boot()
