@@ -23,24 +23,25 @@ function isIgnored(filePath) {
   return IGNORED_PREFIXES.some(prefix => filePath.startsWith(prefix))
 }
 
-function read() {
-  if (!fs.existsSync(QUEUE_PATH)) return { ...EMPTY_QUEUE }
+function read(queuePath = QUEUE_PATH) {
+  if (!fs.existsSync(queuePath)) return { ...EMPTY_QUEUE }
   try {
-    return JSON.parse(fs.readFileSync(QUEUE_PATH, 'utf8'))
+    return JSON.parse(fs.readFileSync(queuePath, 'utf8'))
   } catch {
     return { ...EMPTY_QUEUE }
   }
 }
 
-function write(queue) {
-  fs.writeFileSync(QUEUE_PATH, JSON.stringify(queue, null, 2))
+function write(queue, queuePath = QUEUE_PATH) {
+  fs.mkdirSync(path.dirname(queuePath), { recursive: true })
+  fs.writeFileSync(queuePath, JSON.stringify(queue, null, 2))
 }
 
-function add(filePath) {
+function add(filePath, queuePath = QUEUE_PATH) {
   const normalized = filePath.replace(/\\/g, '/')
   if (isIgnored(normalized)) return
 
-  const queue = read()
+  const queue = read(queuePath)
   const alreadyQueued = queue.pending.some(e => e.file === normalized)
   if (alreadyQueued) return
 
@@ -48,11 +49,11 @@ function add(filePath) {
     file: normalized,
     addedAt: new Date().toISOString(),
   })
-  write(queue)
+  write(queue, queuePath)
 }
 
-function clear() {
-  write({ pending: [], lastClear: new Date().toISOString() })
+function clear(queuePath = QUEUE_PATH) {
+  write({ pending: [], lastClear: new Date().toISOString() }, queuePath)
 }
 
 function pendingCount() {

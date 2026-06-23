@@ -664,6 +664,13 @@ async function runScan() {
   await refreshStatus()
 }
 
+function confirmRegen() {
+  const total = state.generationTotal || '?'
+  const lang = state.lang === 'es' ? 'español' : 'inglés'
+  if (!confirm(`¿Regenerar toda la documentación en ${lang}?\n\nEsto sobreescribirá todos los archivos .md existentes.`)) return
+  runGenerate(true)
+}
+
 function setLang(lang) {
   state.lang = lang
   const es = document.getElementById('lang-es')
@@ -743,6 +750,7 @@ async function runGenerate(force = false) {
   state.generationTotal = total
   state.generationDone = 0
   state.generationLog = []
+  state.generationStartMs = Date.now()
 }
 
 function handleProgressEvent(raw) {
@@ -767,7 +775,16 @@ function handleProgressEvent(raw) {
   const log = document.getElementById('gen-log')
 
   if (bar) bar.style.width = `${Math.round((done / total) * 100)}%`
-  if (cnt) cnt.textContent = `${done} / ${total}`
+  if (cnt) {
+    let eta = ''
+    if (done > 2 && state.generationStartMs) {
+      const elapsed = (Date.now() - state.generationStartMs) / 1000
+      const secsPerFile = elapsed / done
+      const remaining = Math.round(secsPerFile * (total - done))
+      eta = remaining > 5 ? ` — ~${remaining}s restantes` : ''
+    }
+    cnt.textContent = `${done} / ${total}${eta}`
+  }
   if (!log) return
 
   const row = document.createElement('div')
@@ -867,7 +884,7 @@ function showRegenPanel() {
         </div>
       </div>
 
-      <button class="bootstrap-btn" id="gen-btn" onclick="runGenerate(true)" style="max-width:300px">
+      <button class="bootstrap-btn" id="gen-btn" onclick="confirmRegen()" style="max-width:300px">
         <span id="gen-btn-icon">✨</span>
         <span id="gen-btn-label">Regenerar todos los docs</span>
       </button>
@@ -878,9 +895,10 @@ function showRegenPanel() {
 }
 
 function isArchTemplate(text) {
-  // Detects if ARCHITECTURE.md still has placeholder content
-  const placeholders = (text.match(/<!--[^>]+-->|\| {0,3}\|/g) || []).length
-  return placeholders >= 3
+  // Solo es plantilla si tiene comentarios HTML placeholder O filas de tabla completamente vacías
+  const hasComments = /<!--\s*(Describe|describe|TODO|todo)/.test(text)
+  const emptyRows = (text.match(/^\|(\s*\|){3,}\s*$/mg) || []).length
+  return hasComments || emptyRows >= 3
 }
 
 async function generateArch() {

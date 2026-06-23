@@ -12,18 +12,27 @@
   ],
   "license": "MIT",
   "type": "commonjs",
+  "main": "./bin/docutrack.js",
   "bin": {
-    "docutrack": "./bin/docutrack.js"
+    "docutrack": "bin/docutrack.js"
   },
   "files": [
     "bin/",
     "src/",
     "templates/"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mnovoaq/docutrack.git"
+  },
+  "homepage": "https://github.com/mnovoaq/docutrack#readme",
+  "bugs": {
+    "url": "https://github.com/mnovoaq/docutrack/issues"
+  },
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
-    "test": "node --test src/**/*.test.js"
+    "test": "node --test src/utils/queue.test.js src/viewer/server.test.js"
   }
 }
