@@ -65,7 +65,8 @@ async function run(args) {
   }
 
   // ── 2. Scan existing source files ─────────────────────────────
-  const queue = readQueue(cwd)
+  // read/write use a relative path (.docutrack/queue.json) — don't pass cwd as queuePath
+  const queue = readQueue()
   const alreadyQueued = new Set(queue.pending.map(e => e.file))
 
   if (queue.pending.length === 0) {
@@ -105,7 +106,7 @@ async function run(args) {
   }
 
   // ── 4. Next-step instructions ─────────────────────────────────
-  const pending = readQueue(cwd).pending.length
+  const pending = readQueue().pending.length
   console.log('\n  ' + '─'.repeat(40))
 
   if (pending > 0) {
