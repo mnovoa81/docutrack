@@ -2,10 +2,68 @@
 
 const fs = require('fs')
 const path = require('path')
+const readline = require('readline')
 const { exec } = require('child_process')
 const { installHooks, SETTINGS_PATH } = require('../utils/settings')
 const { isPortInUse, startServerDaemon, isServerRunning } = require('../utils/daemon')
 const { write: writeQueue } = require('../utils/queue')
+
+// ── Questionnaire strings (bilingual) ─────────────────────────
+const Q = {
+  es: {
+    q2: '  Describe el proyecto en una oración:\n  > ',
+    q3: '\n  ¿Quién lee estos docs?\n  [1] Solo yo / equipo pequeño  (técnico, conciso)\n  [2] Incorporamos devs nuevos  (más contexto y explicación)\n  [3] Mixto\n  > ',
+    q4: '\n  ¿Profundidad de los docs?\n  [1] Conciso   — resumen + API pública\n  [2] Estándar  — + decisiones de diseño y gotchas  (recomendado)\n  [3] Detallado — + ejemplos y contexto completo\n  > ',
+    saved: '✓  Preferencias guardadas',
+  },
+  en: {
+    q2: '  Describe this project in one sentence:\n  > ',
+    q3: '\n  Who reads these docs?\n  [1] Just me / small team  (technical, concise)\n  [2] Onboarding new devs  (more context and explanation)\n  [3] Mixed\n  > ',
+    q4: '\n  Documentation depth?\n  [1] Concise   — summary + public API\n  [2] Standard  — + design decisions and gotchas  (recommended)\n  [3] Detailed  — + examples and full context\n  > ',
+    saved: '✓  Preferences saved',
+  },
+}
+
+async function runQuestionnaire() {
+  // In non-interactive mode (CI, pipes) use sensible defaults silently
+  if (!process.stdin.isTTY) {
+    return { lang: 'en', projectDescription: '', audience: 'team', docDepth: 'standard' }
+  }
+
+  // Single readline instance for the whole questionnaire
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+  const ask = (prompt) => new Promise(resolve => rl.question(prompt, a => resolve(a.trim())))
+
+  console.log('')
+
+  // Q1: Language — always bilingual so any developer understands it
+  const langRaw = await ask(
+    '  Documentation language? / ¿Idioma de la documentación?\n' +
+    '  [1] Español  [2] English  [3] Otro/Other: ___\n' +
+    '  > '
+  )
+
+  let lang
+  const l = langRaw.toLowerCase()
+  if (l === '1' || l.startsWith('es') || l.startsWith('sp')) lang = 'es'
+  else if (l === '2' || l.startsWith('en')) lang = 'en'
+  else lang = langRaw || 'en'
+
+  const s = Q[lang] || Q.en
+
+  // Q2–Q4 in the chosen language
+  const description = await ask('\n' + s.q2)
+  const audRaw     = await ask(s.q3)
+  const depthRaw   = await ask(s.q4)
+
+  rl.close()
+
+  const audience = audRaw === '2' ? 'onboarding' : audRaw === '3' ? 'mixed' : 'team'
+  const docDepth  = depthRaw === '1' ? 'concise'   : depthRaw === '3' ? 'detailed' : 'standard'
+
+  console.log(`\n  ${s.saved}\n`)
+  return { lang, projectDescription: description, audience, docDepth }
+}
 
 const TEMPLATES_DIR = path.join(__dirname, '..', '..', 'templates')
 const VALID_TEMPLATES = ['nextjs', 'fastapi', 'express', 'monorepo', 'go']
@@ -165,25 +223,44 @@ async function run(args) {
   copyFile(agentSrc, '.claude/agents/documentalista.md')
   step('✓  Installed slash commands + documentalista subagent')
 
-  // ── 8. docutrack.config.json ───────────────────────────────────
-  if (!fs.existsSync('docutrack.config.json')) {
-    const cfgSrc = path.join(TEMPLATES_DIR, 'docutrack.config.json')
-    let cfg = JSON.parse(fs.readFileSync(cfgSrc, 'utf8'))
-    if (template) cfg.template = template
-    else delete cfg.template
-    fs.writeFileSync('docutrack.config.json', JSON.stringify(cfg, null, 2))
-  }
-
-  // ── 9. Hooks in .claude/settings.json ─────────────────────────
+  // ── 8. Hooks in .claude/settings.json ────────────────────────
   const installed = installHooks()
   step(installed
     ? `✓  Registered hooks in ${SETTINGS_PATH}`
     : `✓  Hooks already registered`)
 
-  // ── 10. Auto-write snippet to CLAUDE.md ───────────────────────
+  // ── 9. Questionnaire — language, description, audience, depth ─
+  console.log('\n  ' + '─'.repeat(42))
+  const prefs = await runQuestionnaire()
+
+  // ── 10. docutrack.config.json — merge template + prefs ────────
+  {
+    const cfgSrc = path.join(TEMPLATES_DIR, 'docutrack.config.json')
+    let cfg = JSON.parse(fs.readFileSync(cfgSrc, 'utf8'))
+    if (template) cfg.template = template
+    else delete cfg.template
+    cfg.lang = prefs.lang
+    cfg.projectDescription = prefs.projectDescription
+    cfg.audience = prefs.audience
+    cfg.docDepth = prefs.docDepth
+    fs.writeFileSync('docutrack.config.json', JSON.stringify(cfg, null, 2))
+  }
+
+  // ── 12. Auto-write snippet to CLAUDE.md (with language injected) ─
   const snippetPath = path.join(TEMPLATES_DIR, 'claude-snippet.md')
-  const snippet = fs.readFileSync(snippetPath, 'utf8')
+  const snippetBase = fs.readFileSync(snippetPath, 'utf8')
   copyFile(snippetPath, '.docutrack/claude-snippet.md')
+
+  // Inject the configured language so Claude always knows — without needing to read config.json
+  const LANG_LINE = {
+    es: '> **Idioma de documentación**: Español. Escribe TODA la documentación en español, sin excepción.',
+    en: '> **Documentation language**: English. Write ALL documentation in English.',
+  }
+  const langLine = LANG_LINE[prefs.lang] || `> **Documentation language**: ${prefs.lang}. Write ALL documentation in ${prefs.lang}.`
+  // Insert lang note after the first line (the heading) — avoids em-dash encoding mismatches
+  const snippetLines = snippetBase.split('\n')
+  snippetLines.splice(1, 0, '', langLine)
+  const snippet = snippetLines.join('\n')
 
   const CLAUDE_MD = 'CLAUDE.md'
   const SNIPPET_MARKER = 'DocuTrack — documentation auto-pilot'
@@ -200,7 +277,7 @@ async function run(args) {
     }
   }
 
-  // ── 11. Scan existing source files ────────────────────────────
+  // ── 13. Scan existing source files ────────────────────────────
   const sourceFiles = collectSourceFiles(root)
   if (sourceFiles.length > 0) {
     const now = new Date().toISOString()
@@ -210,7 +287,7 @@ async function run(args) {
     step('✓  No existing source files — starting fresh')
   }
 
-  // ── 12. Start viewer server ────────────────────────────────────
+  // ── 14. Start viewer server ────────────────────────────────────
   if (!noServe) {
     const portBusy = await isPortInUse(PORT)
     if (!portBusy) {
