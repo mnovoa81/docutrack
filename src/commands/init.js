@@ -2,10 +2,19 @@
 
 const fs = require('fs')
 const path = require('path')
+const { exec } = require('child_process')
 const { installHooks, SETTINGS_PATH } = require('../utils/settings')
+const { isPortInUse, startServerDaemon, isServerRunning } = require('../utils/daemon')
+const { write: writeQueue } = require('../utils/queue')
 
 const TEMPLATES_DIR = path.join(__dirname, '..', '..', 'templates')
 const VALID_TEMPLATES = ['nextjs', 'fastapi', 'express', 'monorepo', 'go']
+const PORT = 4242
+
+const SOURCE_DIRS = ['src', 'lib', 'app', 'pkg', 'internal', 'api', 'routes', 'controllers', 'handlers', 'packages']
+const SOURCE_EXTS = new Set(['.js', '.ts', '.mjs', '.jsx', '.tsx', '.py', '.go'])
+const IGNORE_DIRS = new Set(['node_modules', '.next', '.git', 'dist', 'build', '__pycache__', '.docutrack', 'docs', '.worktrees', 'coverage', '.turbo'])
+const IGNORE_RE = [/\.test\.[jt]sx?$/, /\.spec\.[jt]sx?$/, /\.d\.ts$/, /\.min\.js$/]
 
 function copyFile(src, dest) {
   const dir = path.dirname(dest)
@@ -25,8 +34,16 @@ function copyDir(src, dest) {
 
 function step(msg) { process.stdout.write(`  ${msg}\n`) }
 
+function openBrowser(url) {
+  try {
+    const cmd = process.platform === 'win32' ? `start "" "${url}"`
+      : process.platform === 'darwin' ? `open "${url}"`
+      : `xdg-open "${url}"`
+    exec(cmd)
+  } catch { /* best-effort */ }
+}
+
 function autoDetectTemplate() {
-  // Node.js: check package.json
   try {
     const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
     const deps = { ...pkg.dependencies, ...pkg.devDependencies }
@@ -34,31 +51,70 @@ function autoDetectTemplate() {
     if (pkg.workspaces || fs.existsSync('pnpm-workspace.yaml') || fs.existsSync('turbo.json')) return 'monorepo'
     if (deps.express || deps['@types/express'] || deps.fastify || deps.koa) return 'express'
   } catch { /* not a node project */ }
-
-  // Python: check for FastAPI
   for (const f of ['requirements.txt', 'pyproject.toml', 'Pipfile']) {
     if (!fs.existsSync(f)) continue
-    const content = fs.readFileSync(f, 'utf8').toLowerCase()
-    if (content.includes('fastapi')) return 'fastapi'
+    if (fs.readFileSync(f, 'utf8').toLowerCase().includes('fastapi')) return 'fastapi'
   }
-
-  // Go
   if (fs.existsSync('go.mod')) return 'go'
-
   return null
 }
 
-async function run(args) {
-  console.log('\nDocuTrack — initializing in current project\n')
+function collectSourceFiles(root) {
+  const files = []
+  const walk = (dir, depth = 0) => {
+    if (depth > 6 || !fs.existsSync(dir)) return
+    let entries
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        if (!IGNORE_DIRS.has(e.name) && !e.name.startsWith('.')) walk(path.join(dir, e.name), depth + 1)
+      } else if (e.isFile() && SOURCE_EXTS.has(path.extname(e.name))) {
+        if (!IGNORE_RE.some(re => re.test(e.name))) {
+          files.push(path.relative(root, path.join(dir, e.name)).replace(/\\/g, '/'))
+        }
+      }
+    }
+  }
+  for (const dir of SOURCE_DIRS) walk(path.join(root, dir))
+  // Root-level source files (index.js, main.go, server.ts, etc.)
+  try {
+    for (const e of fs.readdirSync(root, { withFileTypes: true })) {
+      if (e.isFile() && SOURCE_EXTS.has(path.extname(e.name)) && !IGNORE_RE.some(re => re.test(e.name))) {
+        files.push(e.name)
+      }
+    }
+  } catch { /* ok */ }
+  return files
+}
 
-  // Guard: already initialized
+async function run(args) {
+  const root = process.cwd()
+  const noServe = args?.includes('--no-serve')
+
+  // ── Guard: already initialized ────────────────────────────────
   if (fs.existsSync('.docutrack')) {
-    console.log('DocuTrack is already initialized in this project.')
-    console.log('Run "docutrack status" to see the current queue.\n')
+    // If called again, just ensure server is running
+    if (!noServe) {
+      const portBusy = await isPortInUse(PORT)
+      const alive = isServerRunning(root)
+      if (!portBusy && !alive) {
+        const { pid } = startServerDaemon(root, PORT)
+        await new Promise(r => setTimeout(r, 900))
+        console.log(`\n  DocuTrack viewer → http://localhost:${PORT}  (pid ${pid})\n`)
+        openBrowser(`http://localhost:${PORT}`)
+      } else {
+        console.log(`\n  DocuTrack already active → http://localhost:${PORT}\n`)
+        openBrowser(`http://localhost:${PORT}`)
+      }
+    } else {
+      console.log('\n  DocuTrack already initialized. Run "docutrack status" to see the queue.\n')
+    }
     return
   }
 
-  // Resolve template
+  console.log('\n  DocuTrack — setting up your project\n  ' + '─'.repeat(42))
+
+  // ── Resolve template ───────────────────────────────────────────
   const templateFlag = args?.find(a => a.startsWith('--template='))?.split('=')[1]
     || (args?.indexOf('--template') !== -1 ? args[args.indexOf('--template') + 1] : null)
   const template = (templateFlag && VALID_TEMPLATES.includes(templateFlag))
@@ -66,117 +122,127 @@ async function run(args) {
     : autoDetectTemplate()
 
   if (templateFlag && !VALID_TEMPLATES.includes(templateFlag)) {
-    console.log(`Unknown template: "${templateFlag}". Valid options: ${VALID_TEMPLATES.join(', ')}\n`)
+    console.error(`Unknown template: "${templateFlag}". Valid options: ${VALID_TEMPLATES.join(', ')}\n`)
     process.exit(1)
   }
 
-  // 1. .docutrack/ structure
+  // ── 1. .docutrack/ structure ───────────────────────────────────
   fs.mkdirSync('.docutrack/hooks', { recursive: true })
-  step('Created .docutrack/')
+  step('✓  Created .docutrack/')
 
-  // 2. Queue
+  // ── 2. Queue ───────────────────────────────────────────────────
   fs.writeFileSync('.docutrack/queue.json', JSON.stringify({ pending: [], lastClear: null }, null, 2))
-  step('Created .docutrack/queue.json')
 
-  // 3. Hook scripts
+  // ── 3. Hook scripts ────────────────────────────────────────────
   copyFile(path.join(TEMPLATES_DIR, 'hooks', 'post-tool-use.js'), '.docutrack/hooks/post-tool-use.js')
   copyFile(path.join(TEMPLATES_DIR, 'hooks', 'on-stop.js'), '.docutrack/hooks/on-stop.js')
-  step('Installed hooks → .docutrack/hooks/')
+  step('✓  Installed hooks (PostToolUse + Stop)')
 
-  // 4. /docs structure
+  // ── 4. /docs structure ─────────────────────────────────────────
   copyDir(path.join(TEMPLATES_DIR, 'docs'), 'docs')
-  step('Created docs/ (modules/, decisions/, api/)')
 
-  // 5. ARCHITECTURE.md — use stack template if available, else base
+  // ── 5. ARCHITECTURE.md ─────────────────────────────────────────
   if (!fs.existsSync('ARCHITECTURE.md')) {
     const stackArch = template && path.join(TEMPLATES_DIR, 'stacks', template, 'ARCHITECTURE.md')
     const archSrc = (stackArch && fs.existsSync(stackArch))
       ? stackArch
       : path.join(TEMPLATES_DIR, 'ARCHITECTURE.md')
     copyFile(archSrc, 'ARCHITECTURE.md')
-    step('Created ARCHITECTURE.md' + (template ? ` (${template} template)` : ''))
-  } else {
-    step('ARCHITECTURE.md already exists — skipped')
   }
+  step(`✓  Created docs/ and ARCHITECTURE.md${template ? ` (${template})` : ''}`)
 
-  // 6. Slash commands
+  // ── 6. Slash commands ──────────────────────────────────────────
   const commandsDir = path.join(TEMPLATES_DIR, 'commands')
   for (const name of fs.readdirSync(commandsDir)) {
     copyFile(path.join(commandsDir, name), path.join('.claude', 'commands', name))
   }
-  step('Installed slash commands → .claude/commands/ (doc-map, arch-review, adr-new, ask-docs)')
 
-  // 7. Documentalista — use stack-specific version if available
+  // ── 7. Documentalista subagent ─────────────────────────────────
   const stackAgent = template && path.join(TEMPLATES_DIR, 'stacks', template, 'documentalista.md')
   const agentSrc = (stackAgent && fs.existsSync(stackAgent))
     ? stackAgent
     : path.join(TEMPLATES_DIR, 'agents', 'documentalista.md')
   copyFile(agentSrc, '.claude/agents/documentalista.md')
-  step('Installed documentalista subagent → .claude/agents/documentalista.md' + (template ? ` (${template})` : ''))
+  step('✓  Installed slash commands + documentalista subagent')
 
-  // 8. docutrack.config.json
+  // ── 8. docutrack.config.json ───────────────────────────────────
   if (!fs.existsSync('docutrack.config.json')) {
     const cfgSrc = path.join(TEMPLATES_DIR, 'docutrack.config.json')
     let cfg = JSON.parse(fs.readFileSync(cfgSrc, 'utf8'))
     if (template) cfg.template = template
     else delete cfg.template
     fs.writeFileSync('docutrack.config.json', JSON.stringify(cfg, null, 2))
-    step('Created docutrack.config.json')
   }
 
-  // 9. Hooks in .claude/settings.json
+  // ── 9. Hooks in .claude/settings.json ─────────────────────────
   const installed = installHooks()
   step(installed
-    ? `Registered hooks in ${SETTINGS_PATH}`
-    : `Hooks already registered in ${SETTINGS_PATH} — skipped`)
+    ? `✓  Registered hooks in ${SETTINGS_PATH}`
+    : `✓  Hooks already registered`)
 
-  // 10. Detect if this is an existing project with source files
-  const hasExistingCode = detectExistingCode()
-
-  // 11. Print next steps
+  // ── 10. Auto-write snippet to CLAUDE.md ───────────────────────
   const snippetPath = path.join(TEMPLATES_DIR, 'claude-snippet.md')
   const snippet = fs.readFileSync(snippetPath, 'utf8')
   copyFile(snippetPath, '.docutrack/claude-snippet.md')
 
-  const templateLine = template
-    ? `\n  Stack template   : ${template}`
-    : ''
-
-  const existingProjectTip = hasExistingCode ? `
-Existing project detected — bootstrap your docs:
-  1. Run: docutrack scan          (queues all source files at once)
-  2. In Claude Code, say: "Run the documentalista to document all pending files"
-  3. Run: docutrack serve         (view the populated docs)
-` : `
-What DocuTrack does from here:
-  • After every file edit → logs the file to .docutrack/queue.json
-  • When the session ends → the documentalista subagent updates the docs
-  • Run "docutrack serve" to open the documentation web viewer
-  • Run "docutrack status" to see coverage, pending, and stale docs
-  • Use /doc-map, /arch-review, /adr-new inside Claude Code sessions
-`
-
-  console.log(`
-Done. DocuTrack is active.${templateLine}
-${existingProjectTip}
-Add this to your CLAUDE.md:
-${'─'.repeat(52)}
-${snippet}${'─'.repeat(52)}
-
-(The snippet is also saved at .docutrack/claude-snippet.md)
-`)
-}
-
-function detectExistingCode() {
-  const SOURCE_DIRS = ['src', 'lib', 'app', 'routes', 'controllers', 'handlers', 'api', 'pkg', 'internal']
-  const SOURCE_EXTS = ['.js', '.ts', '.jsx', '.tsx', '.py', '.go', '.mjs']
-  for (const dir of SOURCE_DIRS) {
-    if (!fs.existsSync(dir)) continue
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (entry.isFile() && SOURCE_EXTS.includes(path.extname(entry.name))) return true
+  const CLAUDE_MD = 'CLAUDE.md'
+  const SNIPPET_MARKER = 'DocuTrack — documentation auto-pilot'
+  if (!fs.existsSync(CLAUDE_MD)) {
+    fs.writeFileSync(CLAUDE_MD, snippet + '\n')
+    step('✓  Created CLAUDE.md with DocuTrack auto-pilot')
+  } else {
+    const existing = fs.readFileSync(CLAUDE_MD, 'utf8')
+    if (!existing.includes(SNIPPET_MARKER)) {
+      fs.writeFileSync(CLAUDE_MD, existing.trimEnd() + '\n\n---\n\n' + snippet + '\n')
+      step('✓  Added DocuTrack auto-pilot to existing CLAUDE.md')
+    } else {
+      step('✓  CLAUDE.md already has DocuTrack auto-pilot')
     }
   }
-  return false
+
+  // ── 11. Scan existing source files ────────────────────────────
+  const sourceFiles = collectSourceFiles(root)
+  if (sourceFiles.length > 0) {
+    const now = new Date().toISOString()
+    writeQueue({ pending: sourceFiles.map(f => ({ file: f, addedAt: now })), lastClear: null })
+    step(`✓  Scanned ${sourceFiles.length} existing source file(s) — queued for documentation`)
+  } else {
+    step('✓  No existing source files — starting fresh')
+  }
+
+  // ── 12. Start viewer server ────────────────────────────────────
+  if (!noServe) {
+    const portBusy = await isPortInUse(PORT)
+    if (!portBusy) {
+      const { pid } = startServerDaemon(root, PORT)
+      await new Promise(r => setTimeout(r, 900))
+      step(`✓  Viewer started → http://localhost:${PORT}  (pid ${pid})`)
+      openBrowser(`http://localhost:${PORT}`)
+    } else {
+      step(`✓  Viewer already running → http://localhost:${PORT}`)
+      openBrowser(`http://localhost:${PORT}`)
+    }
+  }
+
+  // ── Done ───────────────────────────────────────────────────────
+  console.log('\n  ' + '─'.repeat(42))
+
+  if (sourceFiles.length > 0) {
+    console.log(`
+  DocuTrack is ready. ${sourceFiles.length} file(s) queued.
+
+  Open Claude Code in this project.
+  Claude will automatically run the documentalista
+  to document all queued files — no extra steps needed.
+`)
+  } else {
+    console.log(`
+  DocuTrack is ready.
+
+  Open Claude Code in this project.
+  Every file Claude writes will be documented automatically.
+`)
+  }
 }
 
 module.exports = { run }
