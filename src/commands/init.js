@@ -138,29 +138,24 @@ function autoDetectTemplate() {
 
 function collectSourceFiles(root) {
   const files = []
+  const seen = new Set()
   const walk = (dir, depth = 0) => {
-    if (depth > 6 || !fs.existsSync(dir)) return
+    if (depth > 8 || !fs.existsSync(dir)) return
     let entries
     try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
     for (const e of entries) {
       if (e.isDirectory()) {
         if (!IGNORE_DIRS.has(e.name) && !e.name.startsWith('.')) walk(path.join(dir, e.name), depth + 1)
-      } else if (e.isFile() && SOURCE_EXTS.has(path.extname(e.name))) {
+      } else if (e.isFile() && SOURCE_EXTS.has(path.extname(e.name).toLowerCase())) {
         if (!IGNORE_RE.some(re => re.test(e.name))) {
-          files.push(path.relative(root, path.join(dir, e.name)).replace(/\\/g, '/'))
+          const rel = path.relative(root, path.join(dir, e.name)).replace(/\\/g, '/')
+          if (!seen.has(rel)) { seen.add(rel); files.push(rel) }
         }
       }
     }
   }
-  for (const dir of SOURCE_DIRS) walk(path.join(root, dir))
-  // Root-level source files (index.js, main.go, server.ts, etc.)
-  try {
-    for (const e of fs.readdirSync(root, { withFileTypes: true })) {
-      if (e.isFile() && SOURCE_EXTS.has(path.extname(e.name)) && !IGNORE_RE.some(re => re.test(e.name))) {
-        files.push(e.name)
-      }
-    }
-  } catch { /* ok */ }
+  // Walk from root — handles any project structure, not just known conventions
+  walk(root)
   return files
 }
 
@@ -323,22 +318,30 @@ async function run(args) {
   // ── Done ───────────────────────────────────────────────────────
   console.log('\n  ' + '─'.repeat(42))
 
-  if (sourceFiles.length > 0) {
-    console.log(`
-  DocuTrack is ready. ${sourceFiles.length} file(s) queued.
+  // Briefing message — copied to clipboard so the user can paste it into an open Claude session
+  const isEs = prefs.lang === 'es'
+  const briefing = isEs
+    ? 'DocuTrack fue inicializado en este proyecto. Revisa el CLAUDE.md actualizado y ejecuta el documentalista para los archivos pendientes. Para el resto de esta sesión documenta manualmente cada archivo nuevo que crees.'
+    : 'DocuTrack was just initialized in this project. Read the updated CLAUDE.md and run the documentalista for pending files. For the rest of this session, manually document each new file you create.'
 
-  Open Claude Code in this project.
-  Claude will automatically run the documentalista
-  to document all queued files — no extra steps needed.
-`)
-  } else {
-    console.log(`
-  DocuTrack is ready.
+  copyToClipboard(briefing)
 
-  Open Claude Code in this project.
-  Every file Claude writes will be documented automatically.
-`)
-  }
+  const queueNote = sourceFiles.length > 0
+    ? (isEs ? `${sourceFiles.length} archivo(s) en cola.` : `${sourceFiles.length} file(s) queued.`)
+    : (isEs ? 'Listo para nuevos archivos.' : 'Ready for new files.')
+
+  console.log(isEs
+    ? `\n  DocuTrack listo. ${queueNote}\n\n  Si ya tienes Claude Code abierto en este proyecto, pega esto (ya está en el portapapeles):\n\n  ${briefing}\n\n  Si no, abre Claude Code — documentará todo automáticamente.\n`
+    : `\n  DocuTrack ready. ${queueNote}\n\n  If Claude Code is already open in this project, paste this (already in clipboard):\n\n  ${briefing}\n\n  Otherwise, open Claude Code — it will document everything automatically.\n`
+  )
+}
+
+function copyToClipboard(text) {
+  try {
+    const { spawnSync } = require('child_process')
+    if (process.platform === 'win32') spawnSync('clip', [], { input: text, encoding: 'utf8' })
+    else if (process.platform === 'darwin') spawnSync('pbcopy', [], { input: text, encoding: 'utf8' })
+  } catch { /* best-effort */ }
 }
 
 module.exports = { run }

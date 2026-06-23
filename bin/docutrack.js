@@ -5,6 +5,7 @@
 const [, , command, ...args] = process.argv
 
 const commands = {
+  'install-global': () => require('../src/commands/install-global'),
   setup: () => require('../src/commands/setup'),
   init: () => require('../src/commands/init'),
   serve: () => require('../src/commands/serve'),
@@ -23,6 +24,7 @@ if (!command || command === '--help' || command === '-h') {
 docutrack — Claude Code documentation plugin
 
 Usage:
+  docutrack install-global                Install hooks globally — run once after npm install
   docutrack setup                         One-command setup: init + scan + start viewer
   docutrack init                          Initialize DocuTrack (runs interactive questionnaire)
   docutrack init --lang=es --description="<desc>" --audience=team --depth=standard
