@@ -44,6 +44,7 @@ class DocuTrackServer {
     if (p === '/api/scan' && req.method === 'POST')          return this.serveScan(res)
     if (p === '/api/generate' && req.method === 'POST')      return this.serveGenerate(res, req)
     if (p === '/api/generate-arch' && req.method === 'POST') return this.serveGenerateArch(res, req)
+    if (p === '/api/search')                                 return this.serveSearch(res, reqUrl.searchParams.get('q'))
     if (p === '/events')                                     return this.serveSSE(req, res)
 
     res.writeHead(404, { 'Content-Type': 'text/plain' })
@@ -570,6 +571,47 @@ Instructions:
       .replace(/^app\//, '')
       .replace(/\/route\.[jt]s$/, '')
       .replace(/\[([^\]]+)\]/g, '{$1}')
+  }
+
+  serveSearch(res, q) {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    if (!q || q.length < 2) return res.end(JSON.stringify([]))
+
+    const lq = q.toLowerCase()
+    const results = []
+
+    const searchFile = (fullPath, relPath) => {
+      if (results.length >= 8) return
+      try {
+        const content = fs.readFileSync(fullPath, 'utf8')
+        const lc = content.toLowerCase()
+        const idx = lc.indexOf(lq)
+        if (idx === -1) return
+        const start = Math.max(0, idx - 50)
+        const end = Math.min(content.length, idx + lq.length + 100)
+        const snippet = (start > 0 ? '…' : '') + content.slice(start, end).replace(/[#*`\n]/g, ' ').replace(/\s+/g, ' ').trim() + (end < content.length ? '…' : '')
+        const titleMatch = content.match(/^#\s+(.+)/m)
+        const title = titleMatch ? titleMatch[1].trim() : path.basename(relPath, '.md')
+        results.push({ path: relPath.replace(/\\/g, '/'), title, snippet })
+      } catch { /* skip */ }
+    }
+
+    const archPath = path.join(this.root, 'ARCHITECTURE.md')
+    if (fs.existsSync(archPath)) searchFile(archPath, 'ARCHITECTURE.md')
+
+    const walk = (dir) => {
+      if (results.length >= 8 || !fs.existsSync(dir)) return
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (e.isDirectory()) walk(path.join(dir, e.name))
+        else if (e.name.endsWith('.md') && e.name !== '.gitkeep') {
+          const full = path.join(dir, e.name)
+          searchFile(full, path.relative(this.root, full))
+        }
+      }
+    }
+    walk(path.join(this.root, 'docs'))
+
+    res.end(JSON.stringify(results))
   }
 
   serveSSE(req, res) {
