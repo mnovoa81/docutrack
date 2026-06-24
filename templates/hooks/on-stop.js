@@ -30,6 +30,7 @@ const IGNORE_DIRS = new Set(['node_modules', '.next', '.git', 'dist', 'build', '
 const IGNORE_RE   = [/\.test\.[jt]sx?$/, /\.spec\.[jt]sx?$/, /\.d\.ts$/, /\.min\.js$/]
 
 const queued = new Set(queue.pending.map(e => e.file))
+const lastClear = queue.lastClear ? new Date(queue.lastClear).getTime() : 0
 const now = new Date().toISOString()
 let caught = 0
 
@@ -43,11 +44,18 @@ const walk = (dir, root) => {
     } else if (e.isFile() && SOURCE_EXTS.has(path.extname(e.name).toLowerCase())) {
       if (IGNORE_RE.some(re => re.test(e.name))) continue
       const rel = path.relative(root, path.join(dir, e.name)).replace(/\\/g, '/')
-      if (!queued.has(rel)) {
-        queue.pending.push({ file: rel, addedAt: now })
-        queued.add(rel)
-        caught++
+      if (queued.has(rel)) continue
+      // Only catch-all files modified AFTER the last documentation run
+      // This prevents re-queuing already-documented files on every session end
+      if (lastClear > 0) {
+        try {
+          const mtime = fs.statSync(path.join(dir, e.name)).mtimeMs
+          if (mtime <= lastClear) continue
+        } catch { continue }
       }
+      queue.pending.push({ file: rel, addedAt: now })
+      queued.add(rel)
+      caught++
     }
   }
 }

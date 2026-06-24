@@ -98,6 +98,8 @@ ARCHITECTURE.md     ← tech stack · module map · data flow · env vars
 `docutrack serve` opens a local documentation browser at `http://localhost:4242`:
 
 - Browse modules, API docs, decisions, and architecture in one place
+- **Live reload** — docs update in the browser the moment the documentalista finishes, no manual refresh
+- **API Explorer** — visual OpenAPI browser auto-generated from your routes (Express, FastAPI, Next.js, Go)
 - Full-text search with `Cmd/Ctrl+K`
 - Mermaid diagram rendering
 - Dark/light mode
@@ -114,6 +116,7 @@ ARCHITECTURE.md     ← tech stack · module map · data flow · env vars
 | `docutrack init --lang=es --description="…" --audience=team --depth=standard` | Non-interactive init (used by Claude Code) |
 | `docutrack init --template <name>` | Init with a specific stack template |
 | `docutrack serve` | Open the web viewer at `http://localhost:4242` |
+| `docutrack stop` | Stop the running viewer server |
 | `docutrack scan` | Queue all existing source files for documentation |
 | `docutrack scan --dry-run` | Preview what would be queued |
 | `docutrack status` | Show coverage, pending files, and stale docs |

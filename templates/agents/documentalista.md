@@ -110,7 +110,13 @@ If the modified file defines routes/endpoints, update or create `docs/api/<servi
 **Notes**: ...
 ```
 
-**7. Clear the queue**
+**7. Regenerate API Explorer**
+Always run this — it's fast and keeps the API Explorer in sync with any route changes:
+```bash
+npx docutrack analyze
+```
+
+**8. Clear the queue**
 ```bash
 npx docutrack clear
 ```

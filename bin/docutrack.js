@@ -6,6 +6,7 @@ const [, , command, ...args] = process.argv
 
 const commands = {
   'install-global': () => require('../src/commands/install-global'),
+  stop: () => require('../src/commands/stop'),
   setup: () => require('../src/commands/setup'),
   init: () => require('../src/commands/init'),
   serve: () => require('../src/commands/serve'),
